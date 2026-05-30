@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  address   String   @unique
+  username  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id              String   @id @default(uuid())
+  txHash          String   @unique
+  fromAddress     String
+  toAddress       String
+  amount          String   // Store as string to handle large uint256 numbers accurately
+  memo            String?
+  status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  blockNumber     Int
+  timestamp       DateTime @default(now())
+}
+
+model PaymentRequest {
+  id          String   @id @default(uuid())
+  fromAddress String   // The person requesting the payment
+  toAddress   String?  // Optional, if directed at a specific person
+  amount      String
+  memo        String?
+  status      String   @default("PENDING") // PENDING, PAID, CANCELLED
+  createdAt   DateTime @default(now())
+}
+
+model SyncState {
+  key   String @id
+  value String
+}
+

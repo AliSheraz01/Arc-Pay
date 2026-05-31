@@ -32,4 +32,4 @@ cache/
 deployments.json
 
 # Prisma
-prisma/dev.db
+backend/dev.db

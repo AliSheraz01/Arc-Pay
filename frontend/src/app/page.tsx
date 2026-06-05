@@ -74,6 +74,7 @@ export default function DashboardPage() {
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
     functionName: 'getMyUsername',
+    account: address,
     query: { enabled: !!address && isCorrectNetwork },
   })
 

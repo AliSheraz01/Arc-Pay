@@ -11,7 +11,7 @@ import {
   Settings, 
   Sun, 
   Moon,
-  Users,
+  User,
   Link2,
 } from 'lucide-react'
 
@@ -42,7 +42,7 @@ export function Sidebar() {
     { href: '/send', label: 'Send', icon: Send },
     { href: '/receive', label: 'Receive', icon: Download },
     { href: '/history', label: 'Transactions', icon: History },
-    { href: '#contacts', label: 'Contacts', icon: Users },
+    { href: '/profile', label: 'Profile', icon: User },
     { href: '/receive?tab=request', label: 'Payment Links', icon: Link2 },
     { href: '/settings', label: 'Settings', icon: Settings },
   ]

@@ -51,6 +51,7 @@ export default function ProfilePage() {
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
     functionName: 'getMyUsername',
+    account: address,
     query: { enabled: !!address && isCorrectNetwork },
   })
 

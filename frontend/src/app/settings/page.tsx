@@ -25,6 +25,7 @@ export default function SettingsPage() {
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
     functionName: 'getMyUsername',
+    account: address,
     query: { enabled: !!address },
   })
 

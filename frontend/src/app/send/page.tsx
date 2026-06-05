@@ -2,11 +2,11 @@
 
 import { useState, useCallback, useEffect, Suspense } from 'react'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, isAddress } from 'viem'
+import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { USDC_ADDRESS, ROUTER_ADDRESS, EXPLORER_URL, BACKEND_URL } from '@/lib/constants'
-import { USDC_ABI, ROUTER_ABI } from '@/lib/abi'
+import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL, arcTestnet } from '@/lib/constants'
+import { USDC_ABI, ROUTER_ABI, REGISTRY_ABI } from '@/lib/abi'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Clock, CheckCircle, Search, AlertCircle } from 'lucide-react'
@@ -45,7 +45,7 @@ function SendForm() {
   const amountNum = parseFloat(amount || '0')
   const isValidAmount = !isNaN(amountNum) && amountNum > 0 && amountNum <= parseFloat(balanceFormatted)
 
-  // Resolve username to address
+  // Resolve username to address (backend first, then on-chain fallback)
   const resolveRecipient = useCallback(async (value: string) => {
     setResolveError('')
     setResolvedAddress(null)
@@ -64,12 +64,38 @@ function SendForm() {
 
     setResolving(true)
     try {
+      // 1. Try backend API first
       const res = await fetch(`${BACKEND_URL}/api/resolve/${username}`)
-      if (!res.ok) throw new Error('not found')
-      const data = await res.json()
-      setResolvedAddress(data.address as `0x${string}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.address) {
+          setResolvedAddress(data.address as `0x${string}`)
+          return
+        }
+      }
+      throw new Error('backend failed')
     } catch {
-      setResolveError(`Could not find user "${value}"`)
+      // 2. Fallback: query on-chain registry contract directly
+      try {
+        const client = createPublicClient({
+          chain: arcTestnet,
+          transport: http('https://rpc.testnet.arc.network'),
+        })
+        const resolved = await client.readContract({
+          address: REGISTRY_ADDRESS,
+          abi: REGISTRY_ABI,
+          functionName: 'resolveUsername',
+          args: [username.toLowerCase()],
+        }) as `0x${string}`
+
+        if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
+          setResolvedAddress(resolved)
+          return
+        }
+      } catch (onChainErr) {
+        console.error('On-chain resolve failed:', onChainErr)
+      }
+      setResolveError(`Could not find user "@${username}"`)
     } finally {
       setResolving(false)
     }

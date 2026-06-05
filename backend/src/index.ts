@@ -47,16 +47,49 @@ app.get('/api/resolve/:username', async (req, res) => {
     if (username.startsWith('@')) {
       username = username.substring(1);
     }
+    const cleanUsername = username.toLowerCase().trim();
     
+    // 1. Try database lookup first
     const user = await prisma.user.findUnique({
-      where: { username: username.toLowerCase() }
+      where: { username: cleanUsername }
     });
     
-    if (!user) {
-      return res.status(404).json({ error: 'Username not found' });
+    if (user) {
+      return res.json({ address: user.address });
     }
-    res.json({ address: user.address });
+
+    // 2. Fallback to querying the blockchain directly
+    console.log(`[Resolve] Username @${cleanUsername} not in DB, querying blockchain...`);
+    const resolvedAddress = await viemClient.readContract({
+      address: REGISTRY_ADDRESS,
+      abi: [
+        {
+          name: 'resolveUsername',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: '_username', type: 'string' }],
+          outputs: [{ name: '', type: 'address' }],
+        }
+      ] as const,
+      functionName: 'resolveUsername',
+      args: [cleanUsername],
+    });
+
+    // If resolved address is not the zero address, it's a valid username
+    if (resolvedAddress && resolvedAddress !== '0x0000000000000000000000000000000000000000') {
+      console.log(`[Resolve] Successfully resolved @${cleanUsername} to ${resolvedAddress} on-chain!`);
+      // Optionally upsert into DB so it's cached
+      await prisma.user.upsert({
+        where: { address: resolvedAddress.toLowerCase() },
+        update: { username: cleanUsername },
+        create: { address: resolvedAddress.toLowerCase(), username: cleanUsername }
+      });
+      return res.json({ address: resolvedAddress });
+    }
+    
+    return res.status(404).json({ error: 'Username not found' });
   } catch (error) {
+    console.error('Resolve error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

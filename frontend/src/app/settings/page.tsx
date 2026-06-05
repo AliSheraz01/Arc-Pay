@@ -1,22 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import { Header } from '@/components/Header'
+import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { REGISTRY_ADDRESS, EXPLORER_URL } from '@/lib/constants'
-import { REGISTRY_ABI } from '@/lib/abi'
+import { REGISTRY_ADDRESS, USDC_ADDRESS, EXPLORER_URL } from '@/lib/constants'
+import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
 import Link from 'next/link'
+import { formatUnits } from 'viem'
+import { User, Shield, CreditCard, Clock, CheckCircle } from 'lucide-react'
 
 export default function SettingsPage() {
   const { address, isConnected } = useAccount()
   const [usernameInput, setUsernameInput] = useState('')
   const [regTxHash, setRegTxHash] = useState<`0x${string}` | undefined>()
+  const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
   const [registering, setRegistering] = useState(false)
   const [regError, setRegError] = useState('')
 
   const { writeContractAsync } = useWriteContract()
 
+  // 1. Read current username
   const { data: currentUsername, refetch } = useReadContract({
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
@@ -24,82 +28,150 @@ export default function SettingsPage() {
     query: { enabled: !!address },
   })
 
+  // 2. Read USDC Allowance for Registry
+  const { data: registryAllowance, refetch: refetchAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: USDC_ABI,
+    functionName: 'allowance',
+    args: address ? [address, REGISTRY_ADDRESS] : undefined,
+    query: { enabled: !!address, refetchInterval: 5000 },
+  })
+
+  // 3. Read USDC Balance
+  const { data: usdcBalance, refetch: refetchBalance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: USDC_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  })
+
+  const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
   const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
+
+  useEffect(() => {
+    if (approveSuccess) {
+      refetchAllowance()
+    }
+  }, [approveSuccess, refetchAllowance])
+
+  useEffect(() => {
+    if (regSuccess) {
+      setRegistering(false)
+      setUsernameInput('')
+      refetch()
+      refetchBalance()
+    }
+  }, [regSuccess, refetch, refetchBalance])
+
+  const REGISTRATION_FEE = BigInt(1000000) // 1 USDC
+  const hasAllowance = registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false
+
+  async function handleApproveUSDC() {
+    setRegError('')
+    try {
+      const tx = await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [REGISTRY_ADDRESS, REGISTRATION_FEE],
+      })
+      setApproveTxHash(tx)
+    } catch (err: unknown) {
+      console.error('Approval failed:', err)
+      setRegError(err instanceof Error ? err.message : 'USDC approval failed')
+    }
+  }
 
   async function handleRegister() {
     if (!usernameInput) return
     setRegistering(true)
     setRegError('')
     try {
+      const username = usernameInput.toLowerCase().trim().replace('@', '')
       const tx = await writeContractAsync({
         address: REGISTRY_ADDRESS,
         abi: REGISTRY_ABI,
         functionName: 'registerUsername',
-        args: [usernameInput.toLowerCase().replace('@', '')],
+        args: [username],
       })
       setRegTxHash(tx)
-      setTimeout(() => refetch(), 4000)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Transaction failed'
-      setRegError(msg.includes('already') ? 'Username already taken' : msg.includes('Address') ? 'This wallet already has a username' : 'Registration failed')
-    } finally {
+      console.error('Registration failed:', err)
+      const msg = err instanceof Error ? err.message : 'Registration failed'
+      setRegError(
+        msg.includes('already taken') 
+          ? 'Username is already taken' 
+          : msg.includes('has a username') 
+          ? 'This wallet already has a username' 
+          : 'Registration failed. Check gas and USDC balance.'
+      )
       setRegistering(false)
     }
   }
 
   if (!isConnected) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-        <Header />
+      <PageLayout>
         <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
-          <p style={{ color: '#8888aa' }}>Connect your wallet to view settings.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Connect your wallet to view settings.</p>
         </div>
-      </div>
+      </PageLayout>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-      <Header />
-      <main style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 16px' }}>
-        <Link href="/" style={{ color: '#55556a', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px' }}>
-          ← Back
+    <PageLayout>
+      <main style={{ maxWidth: '560px', margin: '0 auto' }}>
+        <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px', fontWeight: 600 }}>
+          ← Back to Dashboard
         </Link>
 
         <NetworkGuard>
           {/* Profile */}
-          <div style={{ background: '#111118', border: '1px solid #2a2a3a', borderRadius: '20px', padding: '28px', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f0f0ff', marginBottom: '20px' }}>Username</h2>
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '24px', 
+            padding: '28px', 
+            marginBottom: '20px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+              <User size={18} style={{ color: 'var(--accent)' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>Username</h2>
+            </div>
 
             {currentUsername ? (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: '12px',
-                background: '#7c3aed15', border: '1px solid #7c3aed30',
-                borderRadius: '12px', padding: '16px',
+                display: 'flex', alignItems: 'center', gap: '16px',
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                borderRadius: '16px', padding: '16px 20px',
               }}>
                 <div style={{
-                  width: '40px', height: '40px', borderRadius: '50%',
+                  width: '44px', height: '44px', borderRadius: '50%',
                   background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '18px', fontWeight: 800, color: 'white', flexShrink: 0,
+                  fontSize: '18px', fontWeight: 900, color: 'white', flexShrink: 0,
                 }}>
                   {(currentUsername as string)[0]?.toUpperCase()}
                 </div>
                 <div>
-                  <p style={{ color: '#9f5aff', fontWeight: 700, fontSize: '16px' }}>@{currentUsername as string}</p>
-                  <p style={{ color: '#55556a', fontSize: '12px' }}>Registered on Arc Network</p>
+                  <p style={{ color: 'var(--accent)', fontWeight: 800, fontSize: '16px' }}>@{currentUsername as string}</p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>Registered on Arc Network</p>
                 </div>
               </div>
             ) : (
               <>
-                <p style={{ color: '#8888aa', fontSize: '13px', marginBottom: '16px' }}>
-                  Register a @username so others can send you USDC without knowing your address.
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px', lineHeight: 1.5 }}>
+                  Register a unique **@username** so others can send you USDC without copy-pasting your address.
+                  Creating a username requires a transaction of **1 USDC**.
                 </p>
-                <div style={{ marginBottom: '12px' }}>
+                <div style={{ marginBottom: '16px' }}>
                   <div style={{ position: 'relative' }}>
                     <span style={{
-                      position: 'absolute', left: '14px', top: '50%',
-                      transform: 'translateY(-50%)', color: '#7c3aed', fontWeight: 700,
+                      position: 'absolute', left: '16px', top: '50%',
+                      transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800,
                     }}>@</span>
                     <input
                       type="text"
@@ -107,66 +179,97 @@ export default function SettingsPage() {
                       value={usernameInput}
                       onChange={e => setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       maxLength={30}
+                      disabled={registering || waitingReg || waitingApprove}
                       style={{
-                        width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3a',
-                        borderRadius: '12px', padding: '14px 16px 14px 32px', color: '#f0f0ff',
+                        width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                        borderRadius: '12px', padding: '14px 16px 14px 34px', color: 'var(--text-primary)',
                         fontSize: '15px', outline: 'none', boxSizing: 'border-box',
                       }}
-                      onFocus={e => e.currentTarget.style.borderColor = '#7c3aed'}
-                      onBlur={e => e.currentTarget.style.borderColor = '#2a2a3a'}
+                      onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                      onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                     />
                   </div>
-                  <p style={{ color: '#55556a', fontSize: '11px', marginTop: '6px' }}>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '6px' }}>
                     Lowercase letters, numbers, and underscores only
                   </p>
                 </div>
 
-                {regError && <p style={{ color: '#ff4466', fontSize: '13px', marginBottom: '12px' }}>✗ {regError}</p>}
+                {regError && <p style={{ color: 'var(--red)', fontSize: '13px', marginBottom: '12px' }}>⚠️ {regError}</p>}
 
-                {(regSuccess || waitingReg) && (
+                {(waitingApprove || waitingReg || regSuccess) && (
                   <div style={{
-                    background: '#00d4a815', border: '1px solid #00d4a830',
-                    borderRadius: '10px', padding: '12px', marginBottom: '12px',
+                    background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                    borderRadius: '12px', padding: '14px', marginBottom: '16px',
                   }}>
-                    <p style={{ color: '#00d4a8', fontSize: '13px', fontWeight: 600 }}>
-                      {waitingReg ? '⏳ Confirming on-chain...' : '✓ Username registered!'}
+                    <p style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Clock size={14} className="shimmer-rotate" />
+                      <span>
+                        {waitingApprove ? 'Waiting for USDC Approval...' : waitingReg ? 'Confirming on-chain...' : '✓ Username registered!'}
+                      </span>
                     </p>
-                    {regTxHash && (
-                      <a href={`${EXPLORER_URL}/tx/${regTxHash}`} target="_blank" rel="noreferrer"
-                        style={{ color: '#7c3aed', fontSize: '12px', textDecoration: 'none' }}>
+                    {(approveTxHash || regTxHash) && (
+                      <a href={`${EXPLORER_URL}/tx/${approveTxHash || regTxHash}`} target="_blank" rel="noreferrer"
+                        style={{ color: 'var(--accent)', fontSize: '11px', textDecoration: 'none', display: 'block', marginTop: '6px' }}>
                         View on ArcScan ↗
                       </a>
                     )}
                   </div>
                 )}
 
-                <button
-                  disabled={!usernameInput || registering || waitingReg}
-                  onClick={handleRegister}
-                  style={{
-                    width: '100%',
-                    background: usernameInput && !registering ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : '#2a2a3a',
-                    border: 'none', borderRadius: '12px', padding: '14px',
-                    color: usernameInput && !registering ? 'white' : '#55556a',
-                    fontSize: '15px', fontWeight: 800,
-                    cursor: usernameInput && !registering ? 'pointer' : 'not-allowed',
-                    boxShadow: usernameInput && !registering ? '0 0 30px #7c3aed40' : 'none',
-                  }}
-                >
-                  {registering || waitingReg ? 'Registering...' : 'Register Username'}
-                </button>
+                {!hasAllowance ? (
+                  <button
+                    disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                    onClick={handleApproveUSDC}
+                    style={{
+                      width: '100%',
+                      background: usernameInput ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                      border: 'none', borderRadius: '12px', padding: '14px',
+                      color: usernameInput ? 'white' : 'var(--text-secondary)',
+                      fontSize: '15px', fontWeight: 800,
+                      cursor: usernameInput ? 'pointer' : 'not-allowed',
+                      boxShadow: usernameInput ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                    }}
+                  >
+                    Step 1: Approve 1 USDC Fee
+                  </button>
+                ) : (
+                  <button
+                    disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                    onClick={handleRegister}
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #00d4a8, #00b896)',
+                      border: 'none', borderRadius: '12px', padding: '14px',
+                      color: 'white',
+                      fontSize: '15px', fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(0, 212, 168, 0.25)',
+                    }}
+                  >
+                    Step 2: Register Username (1 USDC)
+                  </button>
+                )}
               </>
             )}
           </div>
 
           {/* Wallet Info */}
-          <div style={{ background: '#111118', border: '1px solid #2a2a3a', borderRadius: '20px', padding: '28px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f0f0ff', marginBottom: '16px' }}>Wallet</h2>
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '24px', 
+            padding: '28px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+              <Shield size={18} style={{ color: 'var(--accent)' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>Wallet & Chain Info</h2>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <Row label="Address" value={address ?? ''} mono />
               <Row label="Network" value="Arc Testnet" />
               <Row label="Chain ID" value="5042002" />
-              <Row label="RPC" value="rpc.testnet.arc.network" />
+              <Row label="RPC URL" value="rpc.testnet.arc.network" />
             </div>
 
             <a
@@ -175,28 +278,31 @@ export default function SettingsPage() {
               rel="noreferrer"
               style={{
                 display: 'block', marginTop: '20px', textAlign: 'center',
-                background: '#1a1a24', border: '1px solid #2a2a3a',
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
                 borderRadius: '12px', padding: '12px',
-                color: '#7c3aed', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                color: 'var(--accent)', fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                transition: 'all 0.2s'
               }}
+              onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+              onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
             >
-              View on ArcScan ↗
+              View Address on ArcScan ↗
             </a>
           </div>
         </NetworkGuard>
       </main>
-    </div>
+    </PageLayout>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1a1a24' }}>
-      <span style={{ color: '#55556a', fontSize: '13px' }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>{label}</span>
       <span style={{
-        color: '#f0f0ff', fontSize: '12px',
+        color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700,
         fontFamily: mono ? 'monospace' : 'inherit',
-        maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         textAlign: 'right',
       }}>
         {value}

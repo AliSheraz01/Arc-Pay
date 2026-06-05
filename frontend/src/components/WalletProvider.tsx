@@ -128,7 +128,7 @@ class WalletErrorBoundary extends React.Component<
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <WalletErrorBoundary>
-      <WagmiProvider config={config} reconnectOnMount={false}>
+      <WagmiProvider config={config} reconnectOnMount={true}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             theme={darkTheme({

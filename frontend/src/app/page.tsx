@@ -1,13 +1,39 @@
 'use client'
 
-import { useAccount, useReadContract, useChainId } from 'wagmi'
-import { Header } from '@/components/Header'
+import { useState, useEffect } from 'react'
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
+import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, ARC_CHAIN_ID, BACKEND_URL } from '@/lib/constants'
+import { 
+  USDC_ADDRESS, 
+  REGISTRY_ADDRESS, 
+  ROUTER_ADDRESS, 
+  EXPLORER_URL, 
+  ARC_CHAIN_ID, 
+  BACKEND_URL 
+} from '@/lib/constants'
 import { USDC_ABI, REGISTRY_ABI } from '@/lib/abi'
 import Link from 'next/link'
-import { formatUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import { useQuery } from '@tanstack/react-query'
+import { 
+  Send as SendIcon, 
+  Download as ReceiveIcon, 
+  Eye, 
+  EyeOff, 
+  User, 
+  QrCode, 
+  Link2, 
+  Coins, 
+  Activity, 
+  BookOpen, 
+  ExternalLink,
+  ChevronRight,
+  CheckCircle,
+  Clock,
+  ArrowUpRight,
+  ArrowDownLeft
+} from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -20,13 +46,22 @@ interface Transaction {
   timestamp: string
 }
 
-
 export default function DashboardPage() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const isCorrectNetwork = chainId === ARC_CHAIN_ID
 
-  const { data: usdcBalance, isLoading: balanceLoading } = useReadContract({
+  const [hideBalance, setHideBalance] = useState(false)
+  const [usernameInput, setUsernameInput] = useState('')
+  const [registering, setRegistering] = useState(false)
+  const [regError, setRegError] = useState('')
+  const [regTxHash, setRegTxHash] = useState<`0x${string}` | undefined>()
+  const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
+
+  const { writeContractAsync } = useWriteContract()
+
+  // 1. Read USDC Balance of user
+  const { data: usdcBalance, isLoading: balanceLoading, refetch: refetchBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: USDC_ABI,
     functionName: 'balanceOf',
@@ -34,16 +69,25 @@ export default function DashboardPage() {
     query: { enabled: !!address && isCorrectNetwork, refetchInterval: 5000 },
   })
 
-  const { data: myUsername } = useReadContract({
+  // 2. Read current username registered to address
+  const { data: myUsername, refetch: refetchUsername } = useReadContract({
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
     functionName: 'getMyUsername',
     query: { enabled: !!address && isCorrectNetwork },
   })
 
-  const formattedBalance = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)).toFixed(2) : '0.00'
+  // 3. Read USDC Allowance for Registry
+  const { data: registryAllowance, refetch: refetchAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: USDC_ABI,
+    functionName: 'allowance',
+    args: address ? [address, REGISTRY_ADDRESS] : undefined,
+    query: { enabled: !!address && isCorrectNetwork, refetchInterval: 5000 },
+  })
 
-  const { data: transactions, isLoading: txsLoading } = useQuery({
+  // 4. Fetch transactions
+  const { data: transactions, isLoading: txsLoading, refetch: refetchTxs } = useQuery({
     queryKey: ['transactions', address],
     queryFn: async () => {
       if (!address) return []
@@ -55,127 +99,432 @@ export default function DashboardPage() {
     refetchInterval: 8000,
   })
 
+  const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
+  const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
+
+  // Trigger refetches after tx completion
+  useEffect(() => {
+    if (approveSuccess) {
+      refetchAllowance()
+    }
+  }, [approveSuccess, refetchAllowance])
+
+  useEffect(() => {
+    if (regSuccess) {
+      setRegistering(false)
+      setUsernameInput('')
+      refetchUsername()
+      refetchBalance()
+      refetchTxs()
+    }
+  }, [regSuccess, refetchUsername, refetchBalance, refetchTxs])
+
+  const formattedBalance = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)).toFixed(2) : '0.00'
+  const REGISTRATION_FEE = BigInt(1000000) // 1 USDC (6 decimals)
+  const hasAllowance = registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false
+
+  async function handleApproveUSDC() {
+    setRegError('')
+    try {
+      const tx = await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [REGISTRY_ADDRESS, REGISTRATION_FEE],
+      })
+      setApproveTxHash(tx)
+    } catch (err: unknown) {
+      console.error('USDC approval failed:', err)
+      setRegError(err instanceof Error ? err.message : 'USDC approval failed')
+    }
+  }
+
+  async function handleRegisterUsername() {
+    if (!usernameInput) return
+    setRegistering(true)
+    setRegError('')
+    try {
+      const username = usernameInput.toLowerCase().trim().replace('@', '')
+      const tx = await writeContractAsync({
+        address: REGISTRY_ADDRESS,
+        abi: REGISTRY_ABI,
+        functionName: 'registerUsername',
+        args: [username],
+      })
+      setRegTxHash(tx)
+    } catch (err: unknown) {
+      console.error('Username registration failed:', err)
+      const msg = err instanceof Error ? err.message : 'Registration failed'
+      setRegError(
+        msg.includes('already taken') 
+          ? 'Username is already taken' 
+          : msg.includes('has a username') 
+          ? 'This wallet already has a username' 
+          : 'Registration failed. Check gas and USDC balance.'
+      )
+      setRegistering(false)
+    }
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-      <Header />
-
-      {/* Background glows */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
-        <div style={{ position: 'absolute', top: '-200px', left: '50%', transform: 'translateX(-50%)', width: '600px', height: '600px', background: '#7c3aed15', borderRadius: '50%', filter: 'blur(100px)' }} />
-        <div style={{ position: 'absolute', bottom: '-100px', right: '-100px', width: '400px', height: '400px', background: '#00d4a810', borderRadius: '50%', filter: 'blur(80px)' }} />
-      </div>
-
-      <main style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 16px', position: 'relative', zIndex: 1 }}>
-
+    <PageLayout>
+      <NetworkGuard>
         {!isConnected ? (
-          <OnboardingSection />
-        ) : (
-          <>
-            <NetworkGuard>
-              {/* Balance Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, #1a0a3a 0%, #0d1a2a 100%)',
-                border: '1px solid #7c3aed40',
-                borderRadius: '24px',
-                padding: '32px 28px',
-                marginBottom: '20px',
-                boxShadow: '0 0 40px #7c3aed20',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                {/* Decorative */}
-                <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px', background: '#7c3aed15', borderRadius: '50%', filter: 'blur(40px)' }} />
+          <div style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
+            {/* Hero badge */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '8px',
+              background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
+              borderRadius: '100px', padding: '6px 14px', marginBottom: '28px',
+            }}>
+              <span style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: 800, letterSpacing: '0.05em' }}>
+                ⚡ POWERED BY ARC NETWORK
+              </span>
+            </div>
 
-                <p style={{ color: '#8888aa', fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
-                  USDC Balance
-                </p>
+            <h1 style={{
+              fontSize: '44px', fontWeight: 900,
+              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--accent-bright) 50%, var(--green) 100%)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '16px',
+            }}>
+              Send Money at the Speed of Web3
+            </h1>
 
-                {balanceLoading ? (
-                  <div style={{ height: '52px', borderRadius: '8px', background: '#ffffff10', marginBottom: '8px' }} className="shimmer" />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '48px', fontWeight: 900, color: '#f0f0ff', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                      {formattedBalance}
-                    </span>
-                    <span style={{ fontSize: '20px', fontWeight: 700, color: '#7c3aed' }}>USDC</span>
-                  </div>
-                )}
+            <p style={{ color: 'var(--text-secondary)', fontSize: '16px', lineHeight: 1.6, marginBottom: '36px' }}>
+              Instant USDC transfers on Arc Network. Zero friction, near-zero fees, and real-time finality.
+            </p>
 
-                {myUsername && (
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    background: '#7c3aed20', border: '1px solid #7c3aed40',
-                    borderRadius: '8px', padding: '4px 10px', marginTop: '4px',
-                  }}>
-                    <span style={{ color: '#9f5aff', fontSize: '13px', fontWeight: 700 }}>@{myUsername as string}</span>
-                  </div>
-                )}
-
-                {address && (
-                  <a
-                    href={`${EXPLORER_URL}/address/${address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ display: 'block', color: '#55556a', fontSize: '12px', marginTop: '12px', textDecoration: 'none', fontFamily: 'monospace' }}
-                  >
-                    {address.slice(0, 8)}…{address.slice(-6)} ↗
-                  </a>
-                )}
-              </div>
-
-              {/* Quick Actions */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                <ActionCard href="/send" emoji="↑" label="Send" color="#7c3aed" />
-                <ActionCard href="/receive" emoji="↓" label="Receive" color="#00d4a8" />
-              </div>
-
-              {/* Contract Info */}
-              {(ROUTER_ADDRESS !== '0x0000000000000000000000000000000000000000') && (
-                <div style={{
-                  background: '#111118',
-                  border: '1px solid #2a2a3a',
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '40px', textAlign: 'left' }}>
+              {[
+                { icon: '⚡', label: 'Instant', desc: 'Sub-second finality' },
+                { icon: '💸', label: 'Cheap', desc: 'Near-zero gas fees' },
+                { icon: '🔒', label: 'Secure', desc: 'Non-custodial wallet' },
+                { icon: '📱', label: 'Simple', desc: 'Send by @username' },
+              ].map(f => (
+                <div key={f.label} style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
                   borderRadius: '16px',
                   padding: '16px',
-                  marginBottom: '20px',
                 }}>
-                  <p style={{ color: '#55556a', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>
-                    Contracts
-                  </p>
-                  <ContractRow label="USDC" address={USDC_ADDRESS} />
-                  <ContractRow label="Router" address={ROUTER_ADDRESS} />
-                  <ContractRow label="Registry" address={REGISTRY_ADDRESS} />
+                  <div style={{ fontSize: '24px', marginBottom: '6px' }}>{f.icon}</div>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>{f.label}</div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{f.desc}</div>
                 </div>
-              )}
+              ))}
+            </div>
 
-              {/* Recent Tx Section */}
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+              Connect your wallet at the top right to access the dashboard
+            </p>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '2fr 1fr',
+            gap: '24px',
+            maxWidth: '1200px',
+            margin: '0 auto',
+          }}
+          className="dashboard-grid"
+          >
+            {/* Left Column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Balance Card */}
               <div style={{
-                background: '#111118',
-                border: '1px solid #2a2a3a',
-                borderRadius: '16px',
-                padding: '20px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '32px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <p style={{ color: '#f0f0ff', fontWeight: 700, fontSize: '15px' }}>Recent Activity</p>
-                  <Link href="/history" style={{ color: '#7c3aed', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
-                    View all →
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Total Balance
+                    </span>
+                    <button 
+                      onClick={() => setHideBalance(!hideBalance)}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                    <span style={{ fontSize: '48px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                      {balanceLoading ? '...' : hideBalance ? '••••••' : formattedBalance}
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)' }}>USDC</span>
+                  </div>
+
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                    {balanceLoading ? '...' : hideBalance ? '$••••••' : `$${formattedBalance} USD`}
+                  </span>
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                    <Link href="/send" style={{ textDecoration: 'none' }}>
+                      <button style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                        border: 'none', borderRadius: '12px', padding: '12px 24px',
+                        color: 'white', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(124, 58, 237, 0.25)', transition: 'all 0.2s',
+                      }}
+                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                      >
+                        <SendIcon size={14} /> Send
+                      </button>
+                    </Link>
+                    <Link href="/receive" style={{ textDecoration: 'none' }}>
+                      <button style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        background: 'transparent', border: '1px solid var(--border)',
+                        borderRadius: '12px', padding: '12px 24px',
+                        color: 'var(--text-primary)', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                        onMouseOver={e => e.currentTarget.style.background = 'var(--surface-raised)'}
+                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <ReceiveIcon size={14} /> Receive
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Radar Pulse Graphic */}
+                <div style={{
+                  width: '120px',
+                  height: '120px',
+                  borderRadius: '50%',
+                  background: 'var(--surface-raised)',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  zIndex: 2,
+                  boxShadow: '0 0 30px var(--accent-glow)'
+                }}>
+                  {/* Glowing Pulse Rings */}
+                  <div style={{
+                    position: 'absolute',
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    border: '2px solid var(--accent)',
+                    animation: 'radar-pulse 2s infinite ease-in-out',
+                    opacity: 0.5,
+                  }} />
+
+                  {/* Arc Icon logo */}
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 16px rgba(124, 58, 237, 0.4)'
+                  }}>
+                    <span style={{ fontSize: '28px', color: 'white', fontWeight: 900 }}>⚡</span>
+                  </div>
+                </div>
+
+                {/* Radar animation style */}
+                <style jsx global>{`
+                  @keyframes radar-pulse {
+                    0% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.3); }
+                    70% { transform: scale(1.4); opacity: 0; box-shadow: 0 0 0 15px rgba(124, 58, 237, 0); }
+                    100% { transform: scale(1.4); opacity: 0; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+                  }
+                  @media (max-width: 768px) {
+                    .dashboard-grid {
+                      grid-template-columns: 1fr !important;
+                    }
+                  }
+                `}</style>
+              </div>
+
+              {/* Profile Registration / Status Section */}
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '28px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <User size={18} style={{ color: 'var(--accent)' }} />
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '16px' }}>My Profile</h3>
+                </div>
+
+                {myUsername ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'var(--surface-raised)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '16px',
+                    padding: '16px 20px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{
+                        width: '48px', height: '48px', borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '20px', fontWeight: 900, color: 'white'
+                      }}>
+                        {(myUsername as string)[0]?.toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 style={{ color: 'var(--accent)', fontWeight: 800, fontSize: '18px' }}>@{myUsername as string}</h4>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
+                          Registered on Arc Chain
+                        </p>
+                      </div>
+                    </div>
+                    <span style={{
+                      background: 'rgba(0, 212, 168, 0.1)', border: '1px solid rgba(0, 212, 168, 0.3)',
+                      color: 'var(--green)', borderRadius: '20px', padding: '6px 14px', fontSize: '12px', fontWeight: 700
+                    }}>
+                      Active
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.5, marginBottom: '20px' }}>
+                      Claim a customized **@username** for your wallet. It costs a one-time transaction of **1 USDC** to register.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{
+                          position: 'absolute', left: '16px', top: '50%',
+                          transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800, fontSize: '16px'
+                        }}>@</span>
+                        <input 
+                          type="text" 
+                          placeholder="choose_username" 
+                          value={usernameInput}
+                          onChange={e => setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                          maxLength={24}
+                          disabled={registering || waitingReg || waitingApprove}
+                          style={{
+                            width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                            borderRadius: '12px', padding: '14px 16px 14px 34px', color: 'var(--text-primary)',
+                            fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box'
+                          }}
+                          onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                          onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                        />
+                      </div>
+
+                      {regError && (
+                        <div style={{ color: 'var(--red)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          ⚠️ <span>{regError}</span>
+                        </div>
+                      )}
+
+                      {(waitingApprove || waitingReg || regSuccess) && (
+                        <div style={{
+                          background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                          borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: 700 }}>
+                            <Clock size={14} className="shimmer-rotate" />
+                            <span>
+                              {waitingApprove ? 'Waiting for USDC Approval...' : waitingReg ? 'Registering username on Arc...' : 'Successfully Registered!'}
+                            </span>
+                          </div>
+                          {(approveTxHash || regTxHash) && (
+                            <a 
+                              href={`${EXPLORER_URL}/tx/${approveTxHash || regTxHash}`} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              style={{ color: 'var(--accent)', fontSize: '11px', textDecoration: 'none' }}
+                            >
+                              Track on ArcScan ↗
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {!hasAllowance ? (
+                        <button
+                          disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                          onClick={handleApproveUSDC}
+                          style={{
+                            width: '100%',
+                            background: usernameInput ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                            border: 'none', borderRadius: '12px', padding: '14px 16px',
+                            color: usernameInput ? 'white' : 'var(--text-secondary)',
+                            fontSize: '15px', fontWeight: 800, cursor: usernameInput ? 'pointer' : 'not-allowed',
+                            boxShadow: usernameInput ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                          }}
+                        >
+                          Step 1: Approve 1 USDC Fee
+                        </button>
+                      ) : (
+                        <button
+                          disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                          onClick={handleRegisterUsername}
+                          style={{
+                            width: '100%',
+                            background: 'linear-gradient(135deg, #00d4a8, #00b896)',
+                            border: 'none', borderRadius: '12px', padding: '14px 16px',
+                            color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(0, 212, 168, 0.25)',
+                          }}
+                        >
+                          Step 2: Register Username (1 USDC)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Transactions */}
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '28px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '16px' }}>Recent Activity</h3>
+                  <Link href="/history" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 700 }}>
+                    View all
                   </Link>
                 </div>
+
                 {txsLoading ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {[1, 2].map(i => (
-                      <div key={i} style={{ height: '54px', borderRadius: '10px', background: '#1a1a24' }} className="shimmer" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {[1, 2, 3].map(i => (
+                      <div key={i} style={{ height: '62px', borderRadius: '14px', background: 'var(--surface-raised)' }} className="shimmer" />
                     ))}
                   </div>
                 ) : !transactions || transactions.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <div style={{ textAlign: 'center', padding: '40px 0', border: '1px dashed var(--border)', borderRadius: '16px' }}>
                     <div style={{ fontSize: '32px', marginBottom: '8px' }}>🌀</div>
-                    <p style={{ color: '#55556a', fontSize: '14px' }}>No transactions yet</p>
-                    <p style={{ color: '#55556a', fontSize: '12px', marginTop: '4px' }}>Send your first payment to get started</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>No transactions yet</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>Make a payment or request funds to get started</p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {transactions.slice(0, 5).map(tx => {
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {transactions.slice(0, 4).map(tx => {
                       const isSent = tx.fromAddress.toLowerCase() === address?.toLowerCase()
                       const amountFormatted = (parseInt(tx.amount) / 1e6).toFixed(2)
                       const counterparty = isSent ? tx.toAddress : tx.fromAddress
@@ -189,46 +538,43 @@ export default function DashboardPage() {
                           style={{ textDecoration: 'none' }}
                         >
                           <div style={{
-                            display: 'flex', alignItems: 'center', gap: '10px',
-                            background: '#0a0a0f', border: '1px solid #2a2a3a',
-                            borderRadius: '10px', padding: '10px 12px',
-                            transition: 'border-color 0.2s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+                            background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                            borderRadius: '16px', padding: '14px 16px', transition: 'border-color 0.2s',
                           }}
-                            onMouseOver={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#7c3aed'}
-                            onMouseOut={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#2a2a3a'}
+                            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                            onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
                           >
                             {/* Icon */}
                             <div style={{
-                              width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                              background: isSent ? '#ff446615' : '#00d4a815',
-                              border: `1px solid ${isSent ? '#ff446630' : '#00d4a830'}`,
+                              width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
+                              background: isSent ? 'var(--red-glow)' : 'var(--green-glow)',
+                              border: `1px solid ${isSent ? 'rgba(255,68,102,0.2)' : 'rgba(0,212,168,0.2)'}`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '13px', color: isSent ? '#ff4466' : '#00d4a8',
+                              color: isSent ? 'var(--red)' : 'var(--green)',
                             }}>
-                              {isSent ? '↑' : '↓'}
+                              {isSent ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
                             </div>
 
                             {/* Details */}
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: '#f0f0ff', fontWeight: 700, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {isSent ? 'To' : 'From'}: {counterparty.slice(0, 6)}…{counterparty.slice(-4)}
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {isSent ? 'Sent to' : 'Received from'} {counterparty.slice(0, 6)}…{counterparty.slice(-4)}
                               </div>
-                              {tx.memo && (
-                                <div style={{ color: '#8888aa', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {tx.memo}
-                                </div>
-                              )}
+                              <div style={{ color: 'var(--text-secondary)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                                <span>{tx.memo || 'USDC Transfer'}</span>
+                              </div>
                             </div>
 
                             {/* Amount */}
                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
                               <span style={{
-                                fontWeight: 800, fontSize: '13px',
-                                color: isSent ? '#ff4466' : '#00d4a8',
+                                fontWeight: 800, fontSize: '14px',
+                                color: isSent ? 'var(--red)' : 'var(--green)',
                               }}>
                                 {isSent ? '-' : '+'}{amountFormatted}
                               </span>
-                              <span style={{ color: '#55556a', fontSize: '10px', marginLeft: '4px' }}>USDC</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px', fontWeight: 600 }}>USDC</span>
                             </div>
                           </div>
                         </a>
@@ -237,119 +583,125 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            </NetworkGuard>
-          </>
+            </div>
+
+            {/* Right Column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Quick Actions */}
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '24px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <QuickActionRow href="/send" icon={SendIcon} label="Send to @username" />
+                  <QuickActionRow href="/receive" icon={QrCode} label="Scan QR Code" />
+                  <QuickActionRow href="/receive" icon={Link2} label="Create Payment Link" />
+                  <QuickActionRow href="/receive" icon={Coins} label="Request Payment" />
+                </div>
+              </div>
+
+              {/* Arc Network Info */}
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '24px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Arc Network</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <NetworkRow label="Network Status" value={<><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)', display: 'inline-block', marginRight: '6px' }} />Connected</>} />
+                  <NetworkRow label="Chain ID" value="5042002" />
+                  <NetworkRow label="RPC URL" value="rpc.testnet.arc.network" />
+                </div>
+              </div>
+
+              {/* Get Started Links */}
+              <div style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '24px',
+                padding: '24px',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+              }}>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Get Started</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <HelpRow href="https://testnet.arcscan.app" label="Learn about Arc" />
+                  <HelpRow href="https://testnet.arcscan.app" label="Bridge to Arc" />
+                  <HelpRow href="https://testnet.arcscan.app" label="View Docs" />
+                </div>
+              </div>
+            </div>
+          </div>
         )}
-      </main>
-    </div>
+      </NetworkGuard>
+    </PageLayout>
   )
 }
 
-function ActionCard({ href, emoji, label, color }: { href: string; emoji: string; label: string; color: string }) {
+function QuickActionRow({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
   return (
     <Link href={href} style={{ textDecoration: 'none' }}>
       <div style={{
-        background: `${color}15`,
-        border: `1px solid ${color}30`,
-        borderRadius: '16px',
-        padding: '20px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+        borderRadius: '16px', transition: 'all 0.2s', cursor: 'pointer'
       }}
         onMouseOver={e => {
-          e.currentTarget.style.background = `${color}25`
-          e.currentTarget.style.borderColor = `${color}60`
-          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.borderColor = 'var(--accent)'
+          e.currentTarget.style.transform = 'translateX(2px)'
         }}
         onMouseOut={e => {
-          e.currentTarget.style.background = `${color}15`
-          e.currentTarget.style.borderColor = `${color}30`
-          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.borderColor = 'var(--border)'
+          e.currentTarget.style.transform = 'translateX(0)'
         }}
       >
-        <div style={{
-          width: '44px', height: '44px', borderRadius: '50%',
-          background: `${color}30`, border: `1px solid ${color}40`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '20px', margin: '0 auto 10px',
-          color,
-        }}>
-          {emoji}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '32px', height: '32px', borderRadius: '10px',
+            background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--accent)'
+          }}>
+            <Icon size={16} />
+          </div>
+          <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{label}</span>
         </div>
-        <span style={{ color: '#f0f0ff', fontWeight: 700, fontSize: '15px' }}>{label}</span>
+        <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
       </div>
     </Link>
   )
 }
 
-function ContractRow({ label, address }: { label: string; address: string }) {
+function NetworkRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1a1a24' }}>
-      <span style={{ color: '#8888aa', fontSize: '13px' }}>{label}</span>
-      <a
-        href={`${EXPLORER_URL}/address/${address}`}
-        target="_blank"
-        rel="noreferrer"
-        style={{ color: '#7c3aed', fontSize: '12px', fontFamily: 'monospace', textDecoration: 'none' }}
-      >
-        {address.slice(0, 6)}…{address.slice(-4)} ↗
-      </a>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700 }}>{value}</span>
     </div>
   )
 }
 
-function OnboardingSection() {
+function HelpRow({ href, label }: { href: string; label: string }) {
   return (
-    <div style={{ textAlign: 'center', paddingTop: '40px' }}>
-      {/* Hero badge */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
-        background: '#7c3aed15', border: '1px solid #7c3aed30',
-        borderRadius: '100px', padding: '6px 14px', marginBottom: '28px',
-      }}>
-        <span style={{ color: '#7c3aed', fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em' }}>
-          ⚡ POWERED BY ARC NETWORK
-        </span>
-      </div>
-
-      <h1 style={{
-        fontSize: '42px', fontWeight: 900,
-        background: 'linear-gradient(135deg, #f0f0ff 0%, #9f5aff 50%, #00d4a8 100%)',
-        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '16px',
-      }}>
-        Send Money at the Speed of Web3
-      </h1>
-
-      <p style={{ color: '#8888aa', fontSize: '16px', lineHeight: 1.6, marginBottom: '36px', maxWidth: '340px', margin: '0 auto 36px' }}>
-        Instant USDC transfers on Arc Network. Zero friction, near-zero fees, and real-time finality.
-      </p>
-
-      {/* Features */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '40px', textAlign: 'left' }}>
-        {[
-          { icon: '⚡', label: 'Instant', desc: 'Sub-second finality' },
-          { icon: '💸', label: 'Cheap', desc: 'Near-zero gas fees' },
-          { icon: '🔒', label: 'Secure', desc: 'Non-custodial wallet' },
-          { icon: '📱', label: 'Simple', desc: 'Send by @username' },
-        ].map(f => (
-          <div key={f.label} style={{
-            background: '#111118',
-            border: '1px solid #2a2a3a',
-            borderRadius: '14px',
-            padding: '16px',
-          }}>
-            <div style={{ fontSize: '22px', marginBottom: '6px' }}>{f.icon}</div>
-            <div style={{ color: '#f0f0ff', fontWeight: 700, fontSize: '14px' }}>{f.label}</div>
-            <div style={{ color: '#55556a', fontSize: '12px' }}>{f.desc}</div>
-          </div>
-        ))}
-      </div>
-
-      <p style={{ color: '#55556a', fontSize: '13px' }}>
-        Connect your wallet above to get started
-      </p>
-    </div>
+    <a 
+      href={href} 
+      target="_blank" 
+      rel="noreferrer" 
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 14px', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+        borderRadius: '12px', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700,
+        transition: 'all 0.2s'
+      }}
+      onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+      onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
+    >
+      <span>{label}</span>
+      <ExternalLink size={14} style={{ color: 'var(--text-muted)' }} />
+    </a>
   )
 }

@@ -13,7 +13,7 @@ async function main() {
 
   // Deploy Username Registry
   const Registry = await ethers.getContractFactory('ArcPayUsernameRegistry')
-  const registry = await Registry.deploy()
+  const registry = await Registry.deploy(USDC_ADDRESS, deployer.address)
   await registry.waitForDeployment()
   const registryAddress = await registry.getAddress()
   console.log('ArcPayUsernameRegistry deployed to:', registryAddress)

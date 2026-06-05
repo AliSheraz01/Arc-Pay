@@ -25,6 +25,8 @@ import type {
 export interface ArcPayUsernameRegistryInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "REGISTRATION_FEE"
+      | "feeRecipient"
       | "getMyUsername"
       | "owner"
       | "pause"
@@ -32,18 +34,29 @@ export interface ArcPayUsernameRegistryInterface extends Interface {
       | "registerUsername"
       | "renounceOwnership"
       | "resolveUsername"
+      | "setFeeRecipient"
       | "transferOwnership"
       | "unpause"
+      | "usdcToken"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "FeeRecipientChanged"
       | "OwnershipTransferred"
       | "Paused"
       | "Unpaused"
       | "UsernameRegistered"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "REGISTRATION_FEE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "feeRecipient",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "getMyUsername",
     values?: undefined
@@ -64,11 +77,24 @@ export interface ArcPayUsernameRegistryInterface extends Interface {
     values: [string]
   ): string;
   encodeFunctionData(
+    functionFragment: "setFeeRecipient",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "transferOwnership",
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
+  encodeFunctionData(functionFragment: "usdcToken", values?: undefined): string;
 
+  decodeFunctionResult(
+    functionFragment: "REGISTRATION_FEE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "feeRecipient",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "getMyUsername",
     data: BytesLike
@@ -89,10 +115,31 @@ export interface ArcPayUsernameRegistryInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "setFeeRecipient",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "unpause", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "usdcToken", data: BytesLike): Result;
+}
+
+export namespace FeeRecipientChangedEvent {
+  export type InputTuple = [
+    oldRecipient: AddressLike,
+    newRecipient: AddressLike
+  ];
+  export type OutputTuple = [oldRecipient: string, newRecipient: string];
+  export interface OutputObject {
+    oldRecipient: string;
+    newRecipient: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace OwnershipTransferredEvent {
@@ -188,6 +235,10 @@ export interface ArcPayUsernameRegistry extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  REGISTRATION_FEE: TypedContractMethod<[], [bigint], "view">;
+
+  feeRecipient: TypedContractMethod<[], [string], "view">;
+
   getMyUsername: TypedContractMethod<[], [string], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
@@ -206,6 +257,12 @@ export interface ArcPayUsernameRegistry extends BaseContract {
 
   resolveUsername: TypedContractMethod<[_username: string], [string], "view">;
 
+  setFeeRecipient: TypedContractMethod<
+    [_newRecipient: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   transferOwnership: TypedContractMethod<
     [newOwner: AddressLike],
     [void],
@@ -214,10 +271,18 @@ export interface ArcPayUsernameRegistry extends BaseContract {
 
   unpause: TypedContractMethod<[], [void], "nonpayable">;
 
+  usdcToken: TypedContractMethod<[], [string], "view">;
+
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "REGISTRATION_FEE"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "feeRecipient"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "getMyUsername"
   ): TypedContractMethod<[], [string], "view">;
@@ -240,12 +305,25 @@ export interface ArcPayUsernameRegistry extends BaseContract {
     nameOrSignature: "resolveUsername"
   ): TypedContractMethod<[_username: string], [string], "view">;
   getFunction(
+    nameOrSignature: "setFeeRecipient"
+  ): TypedContractMethod<[_newRecipient: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "unpause"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "usdcToken"
+  ): TypedContractMethod<[], [string], "view">;
 
+  getEvent(
+    key: "FeeRecipientChanged"
+  ): TypedContractEvent<
+    FeeRecipientChangedEvent.InputTuple,
+    FeeRecipientChangedEvent.OutputTuple,
+    FeeRecipientChangedEvent.OutputObject
+  >;
   getEvent(
     key: "OwnershipTransferred"
   ): TypedContractEvent<
@@ -276,6 +354,17 @@ export interface ArcPayUsernameRegistry extends BaseContract {
   >;
 
   filters: {
+    "FeeRecipientChanged(address,address)": TypedContractEvent<
+      FeeRecipientChangedEvent.InputTuple,
+      FeeRecipientChangedEvent.OutputTuple,
+      FeeRecipientChangedEvent.OutputObject
+    >;
+    FeeRecipientChanged: TypedContractEvent<
+      FeeRecipientChangedEvent.InputTuple,
+      FeeRecipientChangedEvent.OutputTuple,
+      FeeRecipientChangedEvent.OutputObject
+    >;
+
     "OwnershipTransferred(address,address)": TypedContractEvent<
       OwnershipTransferredEvent.InputTuple,
       OwnershipTransferredEvent.OutputTuple,

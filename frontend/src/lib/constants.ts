@@ -28,9 +28,9 @@ export const ARC_CHAIN_ID = 5042002
 
 export const USDC_ADDRESS = '0x3600000000000000000000000000000000000000' as `0x${string}`
 
-export const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ?? '0xebdBBB240aCb50B9Acb626c65613a46E02BCA207') as `0x${string}`
+export const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ?? '0x08EAda9790495804329E0234464fd86CA4b35ff2') as `0x${string}`
 
-export const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_ROUTER_ADDRESS ?? '0xCb8e21db6f7E8F7730886Aa028d7A7691a1d8CB2') as `0x${string}`
+export const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_ROUTER_ADDRESS ?? '0x1bbdb36AD54Fb19781669Ce096074E6a14a73521') as `0x${string}`
 
 export const EXPLORER_URL = 'https://testnet.arcscan.app'
 

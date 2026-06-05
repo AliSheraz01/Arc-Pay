@@ -154,8 +154,8 @@ app.get('/api/requests/:address', async (req, res) => {
 // Contracts deployed on May 19, 2026 — skip empty blocks before that
 const START_BLOCK = 44800000n;
 const RPC_URL = process.env.RPC_URL || 'https://rpc.testnet.arc.network';
-const REGISTRY_ADDRESS = (process.env.REGISTRY_ADDRESS || '0xebdBBB240aCb50B9Acb626c65613a46E02BCA207') as `0x${string}`;
-const ROUTER_ADDRESS = (process.env.ROUTER_ADDRESS || '0xCb8e21db6f7E8F7730886Aa028d7A7691a1d8CB2') as `0x${string}`;
+const REGISTRY_ADDRESS = (process.env.REGISTRY_ADDRESS || '0x08EAda9790495804329E0234464fd86CA4b35ff2') as `0x${string}`;
+const ROUTER_ADDRESS = (process.env.ROUTER_ADDRESS || '0x1bbdb36AD54Fb19781669Ce096074E6a14a73521') as `0x${string}`;
 
 const REGISTRY_ABI = [
   {

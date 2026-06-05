@@ -3,11 +3,12 @@
 import { useState, useCallback } from 'react'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, isAddress } from 'viem'
-import { Header } from '@/components/Header'
+import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL } from '@/lib/constants'
+import { USDC_ADDRESS, ROUTER_ADDRESS, EXPLORER_URL, BACKEND_URL } from '@/lib/constants'
 import { USDC_ABI, ROUTER_ABI } from '@/lib/abi'
 import Link from 'next/link'
+import { ArrowLeft, Clock, CheckCircle, Search, AlertCircle } from 'lucide-react'
 
 type Step = 'form' | 'confirm' | 'success'
 
@@ -109,64 +110,74 @@ export default function SendPage() {
 
   if (!isConnected) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-        <Header />
+      <PageLayout>
         <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
-          <p style={{ color: '#8888aa' }}>Connect your wallet to send payments.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Connect your wallet to send payments.</p>
         </div>
-      </div>
+      </PageLayout>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-      <Header />
-      <main style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 16px' }}>
-        <Link href="/" style={{ color: '#55556a', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px' }}>
-          ← Back
+    <PageLayout>
+      <main style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontWeight: 600 }}>
+          <ArrowLeft size={16} /> Back to Dashboard
         </Link>
 
         <NetworkGuard>
           {step === 'form' && (
-            <div style={{ background: '#111118', border: '1px solid #2a2a3a', borderRadius: '20px', padding: '28px' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#f0f0ff', marginBottom: '4px' }}>Send USDC</h1>
-              <p style={{ color: '#55556a', fontSize: '13px', marginBottom: '28px' }}>Balance: {balanceFormatted} USDC</p>
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '28px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+            }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Send USDC</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '28px' }}>Balance: {balanceFormatted} USDC</p>
 
               {/* Recipient */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ color: '#8888aa', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
                   To
                 </label>
-                <input
-                  type="text"
-                  placeholder="@username or 0x address"
-                  value={recipient}
-                  onChange={e => {
-                    setRecipient(e.target.value)
-                    resolveRecipient(e.target.value)
-                  }}
-                  style={{
-                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3a',
-                    borderRadius: '12px', padding: '14px 16px', color: '#f0f0ff',
-                    fontSize: '15px', outline: 'none', boxSizing: 'border-box',
-                    transition: 'border-color 0.2s',
-                  }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#7c3aed'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#2a2a3a'}
-                />
-                {resolving && <p style={{ color: '#55556a', fontSize: '12px', marginTop: '6px' }}>🔍 Resolving...</p>}
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="@username or 0x address"
+                    value={recipient}
+                    onChange={e => {
+                      setRecipient(e.target.value)
+                      resolveRecipient(e.target.value)
+                    }}
+                    style={{
+                      width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                      borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                      transition: 'border-color 0.2s',
+                    }}
+                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  />
+                </div>
+                {resolving && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><Search size={12} className="shimmer-rotate" /> Resolving username...</p>}
                 {resolvedAddress && !resolveError && (
-                  <p style={{ color: '#00d4a8', fontSize: '12px', marginTop: '6px', fontFamily: 'monospace' }}>
-                    ✓ {resolvedAddress.slice(0, 10)}…{resolvedAddress.slice(-8)}
+                  <p style={{ color: 'var(--green)', fontSize: '12px', marginTop: '6px', fontFamily: 'monospace', fontWeight: 600 }}>
+                    ✓ Resolved: {resolvedAddress.slice(0, 10)}…{resolvedAddress.slice(-8)}
                   </p>
                 )}
-                {resolveError && <p style={{ color: '#ff4466', fontSize: '12px', marginTop: '6px' }}>✗ {resolveError}</p>}
+                {resolveError && (
+                  <p style={{ color: 'var(--red)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <AlertCircle size={12} /> {resolveError}
+                  </p>
+                )}
               </div>
 
               {/* Amount */}
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ color: '#8888aa', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                  Amount (USDC)
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Amount
                 </label>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -174,67 +185,39 @@ export default function SendPage() {
                     placeholder="0.00"
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
-                    min="0"
-                    step="0.01"
                     style={{
-                      width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3a',
-                      borderRadius: '12px', padding: '14px 60px 14px 16px', color: '#f0f0ff',
-                      fontSize: '20px', fontWeight: 700, outline: 'none', boxSizing: 'border-box',
+                      width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                      borderRadius: '12px', padding: '14px 70px 14px 16px', color: 'var(--text-primary)',
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
                       transition: 'border-color 0.2s',
                     }}
-                    onFocus={e => e.currentTarget.style.borderColor = '#7c3aed'}
-                    onBlur={e => e.currentTarget.style.borderColor = '#2a2a3a'}
+                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   />
-                  <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#7c3aed', fontWeight: 700, fontSize: '14px' }}>
+                  <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800, fontSize: '14px' }}>
                     USDC
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                  {['10', '25', '50', '100'].map(p => (
-                    <button key={p}
-                      onClick={() => setAmount(p)}
-                      style={{
-                        background: '#1a1a24', border: '1px solid #2a2a3a', color: '#8888aa',
-                        borderRadius: '8px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseOver={e => { e.currentTarget.style.borderColor = '#7c3aed'; e.currentTarget.style.color = '#9f5aff' }}
-                      onMouseOut={e => { e.currentTarget.style.borderColor = '#2a2a3a'; e.currentTarget.style.color = '#8888aa' }}
-                    >
-                      ${p}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setAmount(balanceFormatted)}
-                    style={{
-                      background: '#1a1a24', border: '1px solid #2a2a3a', color: '#8888aa',
-                      borderRadius: '8px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer',
-                    }}
-                  >
-                    Max
-                  </button>
-                </div>
               </div>
 
-              {/* Memo */}
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ color: '#8888aa', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                  Memo (optional)
+              {/* Note */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Note (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="What's it for?"
+                  placeholder="What is this for?"
                   value={memo}
                   onChange={e => setMemo(e.target.value)}
-                  maxLength={100}
                   style={{
-                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3a',
-                    borderRadius: '12px', padding: '14px 16px', color: '#f0f0ff',
-                    fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+                    width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                    borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
+                    fontSize: '15px', outline: 'none', boxSizing: 'border-box',
                     transition: 'border-color 0.2s',
                   }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#7c3aed'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#2a2a3a'}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 />
               </div>
 
@@ -243,114 +226,144 @@ export default function SendPage() {
                 onClick={() => setStep('confirm')}
                 style={{
                   width: '100%',
-                  background: (resolvedAddress && isValidAmount) ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : '#2a2a3a',
-                  border: 'none', borderRadius: '14px', padding: '16px',
-                  color: (resolvedAddress && isValidAmount) ? 'white' : '#55556a',
-                  fontSize: '16px', fontWeight: 800, cursor: (resolvedAddress && isValidAmount) ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s', letterSpacing: '0.02em',
-                  boxShadow: (resolvedAddress && isValidAmount) ? '0 0 30px #7c3aed40' : 'none',
+                  background: resolvedAddress && isValidAmount ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                  border: 'none', borderRadius: '12px', padding: '16px',
+                  color: resolvedAddress && isValidAmount ? 'white' : 'var(--text-secondary)',
+                  fontSize: '15px', fontWeight: 800,
+                  cursor: resolvedAddress && isValidAmount ? 'pointer' : 'not-allowed',
+                  boxShadow: resolvedAddress && isValidAmount ? '0 4px 16px rgba(124, 58, 237, 0.25)' : 'none',
                 }}
               >
-                Review Payment →
+                Continue
               </button>
             </div>
           )}
 
           {step === 'confirm' && (
-            <div style={{ background: '#111118', border: '1px solid #2a2a3a', borderRadius: '20px', padding: '28px' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#f0f0ff', marginBottom: '24px' }}>Confirm Payment</h1>
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '28px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+            }}>
+              <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '24px' }}>Confirm Payment</h1>
 
-              <div style={{ background: '#0a0a0f', borderRadius: '14px', padding: '20px', marginBottom: '24px' }}>
-                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '40px', fontWeight: 900, color: '#f0f0ff' }}>{amount}</span>
-                  <span style={{ fontSize: '18px', color: '#7c3aed', fontWeight: 700, marginLeft: '8px' }}>USDC</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <InfoRow label="To" value={`${resolvedAddress?.slice(0, 8)}…${resolvedAddress?.slice(-6)}`} />
-                  {recipient.startsWith('@') && <InfoRow label="Username" value={recipient} />}
-                  {memo && <InfoRow label="Memo" value={memo} />}
-                  <InfoRow label="Network" value="Arc Testnet" />
+              <div style={{
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                borderRadius: '16px', padding: '24px', marginBottom: '24px', textAlign: 'center'
+              }}>
+                <span style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  {parseFloat(amount).toFixed(2)}
+                </span>
+                <span style={{ fontSize: '16px', color: 'var(--accent)', fontWeight: 800, marginLeft: '6px' }}>USDC</span>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Recipient</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {recipient.startsWith('@') ? recipient : `${resolvedAddress?.slice(0, 8)}…${resolvedAddress?.slice(-6)}`}
+                    </span>
+                  </div>
+                  {memo && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Note</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic' }}>"{memo}"</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Network</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>Arc Testnet</span>
+                  </div>
                 </div>
               </div>
 
-              {phase !== 'idle' && (
-                <div style={{ background: '#7c3aed15', border: '1px solid #7c3aed30', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
-                  <p style={{ color: '#9f5aff', fontSize: '14px', fontWeight: 600 }}>
-                    {phase === 'approving' ? '⏳ Approving USDC spend...' : '📡 Broadcasting payment...'}
+              {/* Loader alerts */}
+              {phase === 'approving' && (
+                <div style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-accent)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--accent-bright)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Clock size={14} className="shimmer-rotate" />
+                    <span>{waitingApprove ? 'Waiting for USDC spend limit approval...' : 'Approving USDC Router spend limit...'}</span>
+                  </p>
+                </div>
+              )}
+
+              {phase === 'sending' && (
+                <div style={{ background: 'rgba(0, 212, 168, 0.08)', border: '1px solid rgba(0, 212, 168, 0.2)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--green)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <Clock size={14} className="shimmer-rotate" />
+                    <span>{waitingSend ? 'Confirming payment on Arc...' : 'Submitting payment transaction...'}</span>
                   </p>
                 </div>
               )}
 
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
-                  onClick={() => { setStep('form'); setPhase('idle') }}
                   disabled={phase !== 'idle'}
+                  onClick={() => setStep('form')}
                   style={{
-                    flex: 1, background: '#1a1a24', border: '1px solid #2a2a3a',
-                    borderRadius: '12px', padding: '14px', color: '#8888aa',
-                    fontSize: '15px', fontWeight: 700, cursor: 'pointer',
+                    flex: 1, background: 'transparent', border: '1px solid var(--border)',
+                    borderRadius: '12px', padding: '14px', color: 'var(--text-primary)',
+                    fontSize: '15px', fontWeight: 800, cursor: 'pointer',
                   }}
                 >
-                  Back
+                  Cancel
                 </button>
                 <button
-                  onClick={handleSend}
                   disabled={phase !== 'idle'}
+                  onClick={handleSend}
                   style={{
-                    flex: 2,
-                    background: phase !== 'idle' ? '#2a2a3a' : 'linear-gradient(135deg, #7c3aed, #9f5aff)',
-                    border: 'none', borderRadius: '12px', padding: '14px',
-                    color: phase !== 'idle' ? '#55556a' : 'white',
-                    fontSize: '15px', fontWeight: 800, cursor: phase !== 'idle' ? 'not-allowed' : 'pointer',
-                    boxShadow: phase === 'idle' ? '0 0 30px #7c3aed40' : 'none',
+                    flex: 1, background: 'linear-gradient(135deg, #7c3aed, #9f5aff)', border: 'none',
+                    borderRadius: '12px', padding: '14px', color: 'white',
+                    fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(124, 58, 237, 0.25)',
                   }}
                 >
-                  {phase === 'idle' ? 'Confirm & Send' : 'Processing...'}
+                  Confirm & Send
                 </button>
               </div>
             </div>
           )}
 
           {step === 'success' && (
-            <div style={{ background: '#111118', border: '1px solid #00d4a830', borderRadius: '20px', padding: '40px 28px', textAlign: 'center', boxShadow: '0 0 40px #00d4a815' }}>
-              <div style={{ fontSize: '56px', marginBottom: '16px' }}>✅</div>
-              <h1 style={{ fontSize: '26px', fontWeight: 900, color: '#00d4a8', marginBottom: '8px' }}>Payment Sent!</h1>
-              <p style={{ color: '#8888aa', fontSize: '14px', marginBottom: '28px' }}>
-                {amount} USDC sent successfully on Arc Network
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '40px 28px', 
+              textAlign: 'center',
+              boxShadow: '0 4px 30px rgba(0, 212, 168, 0.05)'
+            }}>
+              <div style={{ fontSize: '56px', marginBottom: '16px' }}>🎉</div>
+              <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--green)', marginBottom: '8px' }}>Payment Sent!</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+                You successfully sent {parseFloat(amount).toFixed(2)} USDC to {recipient}
               </p>
+
               {sendTxHash && (
                 <a
                   href={`${EXPLORER_URL}/tx/${sendTxHash}`}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ display: 'block', color: '#7c3aed', fontSize: '13px', marginBottom: '28px', textDecoration: 'none' }}
+                  style={{ display: 'block', color: 'var(--accent)', fontSize: '13px', marginBottom: '32px', textDecoration: 'none', fontWeight: 700 }}
                 >
                   View on ArcScan ↗
                 </a>
               )}
-              <button
-                onClick={() => { setStep('form'); setRecipient(''); setAmount(''); setMemo(''); setResolvedAddress(null); setPhase('idle') }}
-                style={{
+
+              <Link href="/" style={{ textDecoration: 'none' }}>
+                <button style={{
                   width: '100%', background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
-                  border: 'none', borderRadius: '12px', padding: '14px',
+                  border: 'none', borderRadius: '12px', padding: '16px',
                   color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
-                }}
-              >
-                Send Another
-              </button>
+                }}>
+                  Return to Dashboard
+                </button>
+              </Link>
             </div>
           )}
         </NetworkGuard>
       </main>
-    </div>
-  )
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1a1a24' }}>
-      <span style={{ color: '#55556a', fontSize: '13px' }}>{label}</span>
-      <span style={{ color: '#f0f0ff', fontSize: '13px', fontWeight: 600, fontFamily: value.startsWith('0x') ? 'monospace' : 'inherit' }}>{value}</span>
-    </div>
+    </PageLayout>
   )
 }

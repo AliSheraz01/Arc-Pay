@@ -2,10 +2,11 @@
 
 import { useAccount } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
-import { Header } from '@/components/Header'
+import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { BACKEND_URL, EXPLORER_URL } from '@/lib/constants'
 import Link from 'next/link'
+import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Calendar } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -35,39 +36,43 @@ export default function HistoryPage() {
 
   if (!isConnected) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-        <Header />
+      <PageLayout>
         <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
-          <p style={{ color: '#8888aa' }}>Connect your wallet to view history.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Connect your wallet to view history.</p>
         </div>
-      </div>
+      </PageLayout>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
-      <Header />
-      <main style={{ maxWidth: '480px', margin: '0 auto', padding: '24px 16px' }}>
-        <Link href="/" style={{ color: '#55556a', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px' }}>
-          ← Back
+    <PageLayout>
+      <main style={{ maxWidth: '560px', margin: '0 auto' }}>
+        <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontWeight: 600 }}>
+          <ArrowLeft size={16} /> Back to Dashboard
         </Link>
 
         <NetworkGuard>
-          <div style={{ background: '#111118', border: '1px solid #2a2a3a', borderRadius: '20px', padding: '24px' }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#f0f0ff', marginBottom: '6px' }}>Transaction History</h1>
-            <p style={{ color: '#55556a', fontSize: '13px', marginBottom: '24px' }}>Your recent USDC transfers on Arc Network</p>
+          <div style={{ 
+            background: 'var(--surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: '24px', 
+            padding: '28px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+          }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Transaction History</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '28px' }}>Your recent USDC transfers on Arc Network</p>
 
             {isLoading ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {[1, 2, 3].map(i => (
-                  <div key={i} style={{ height: '72px', borderRadius: '12px', background: '#1a1a24' }} className="shimmer" />
+                  <div key={i} style={{ height: '76px', borderRadius: '16px', background: 'var(--surface-raised)' }} className="shimmer" />
                 ))}
               </div>
             ) : !transactions || transactions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <div style={{ textAlign: 'center', padding: '40px 0', border: '1px dashed var(--border)', borderRadius: '16px' }}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>🌀</div>
-                <p style={{ color: '#55556a', fontSize: '14px' }}>No transactions yet</p>
-                <Link href="/send" style={{ color: '#7c3aed', fontSize: '13px', textDecoration: 'none', display: 'block', marginTop: '12px' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>No transactions yet</p>
+                <Link href="/send" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', display: 'block', marginTop: '12px', fontWeight: 700 }}>
                   Send your first payment →
                 </Link>
               </div>
@@ -76,7 +81,6 @@ export default function HistoryPage() {
                 {transactions.map(tx => {
                   const isSent = tx.fromAddress.toLowerCase() === address?.toLowerCase()
                   const amountFormatted = (parseInt(tx.amount) / 1e6).toFixed(2)
-                  const shortHash = `${tx.txHash.slice(0, 8)}…${tx.txHash.slice(-6)}`
                   const counterparty = isSent ? tx.toAddress : tx.fromAddress
                   const date = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -90,35 +94,35 @@ export default function HistoryPage() {
                     >
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: '14px',
-                        background: '#0a0a0f', border: '1px solid #2a2a3a',
-                        borderRadius: '14px', padding: '14px 16px',
+                        background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                        borderRadius: '16px', padding: '16px',
                         transition: 'border-color 0.2s',
                       }}
-                        onMouseOver={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#7c3aed'}
-                        onMouseOut={e => (e.currentTarget as HTMLDivElement).style.borderColor = '#2a2a3a'}
+                        onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
                       >
                         {/* Icon */}
                         <div style={{
                           width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-                          background: isSent ? '#ff446615' : '#00d4a815',
-                          border: `1px solid ${isSent ? '#ff446630' : '#00d4a830'}`,
+                          background: isSent ? 'var(--red-glow)' : 'var(--green-glow)',
+                          border: `1px solid ${isSent ? 'rgba(255,68,102,0.2)' : 'rgba(0,212,168,0.2)'}`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '18px',
+                          color: isSent ? 'var(--red)' : 'var(--green)',
                         }}>
-                          {isSent ? '↑' : '↓'}
+                          {isSent ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}
                         </div>
 
                         {/* Details */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ color: '#f0f0ff', fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>
                             {isSent ? 'Sent' : 'Received'}
                           </div>
-                          <div style={{ color: '#55556a', fontSize: '12px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {counterparty.slice(0, 8)}…{counterparty.slice(-6)}
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {counterparty.slice(0, 10)}…{counterparty.slice(-8)}
                           </div>
                           {tx.memo && (
-                            <div style={{ color: '#8888aa', fontSize: '12px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {tx.memo}
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: 'italic' }}>
+                              "{tx.memo}"
                             </div>
                           )}
                         </div>
@@ -127,12 +131,15 @@ export default function HistoryPage() {
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <div style={{
                             fontWeight: 800, fontSize: '15px',
-                            color: isSent ? '#ff4466' : '#00d4a8',
+                            color: isSent ? 'var(--red)' : 'var(--green)',
                           }}>
                             {isSent ? '-' : '+'}{amountFormatted}
                           </div>
-                          <div style={{ color: '#55556a', fontSize: '11px' }}>USDC</div>
-                          <div style={{ color: '#55556a', fontSize: '11px', marginTop: '2px' }}>{date}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600 }}>USDC</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                            <Calendar size={10} />
+                            <span>{date}</span>
+                          </div>
                         </div>
                       </div>
                     </a>
@@ -143,6 +150,6 @@ export default function HistoryPage() {
           </div>
         </NetworkGuard>
       </main>
-    </div>
+    </PageLayout>
   )
 }

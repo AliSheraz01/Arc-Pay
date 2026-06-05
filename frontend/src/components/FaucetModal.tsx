@@ -11,31 +11,35 @@ export function FaucetModal() {
       <button
         onClick={() => setOpen(true)}
         style={{
-          background: 'linear-gradient(135deg, #00d4a820, #00d4a810)',
-          border: '1px solid #00d4a840',
-          color: '#00d4a8',
-          borderRadius: '10px',
-          padding: '9px 16px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          color: 'var(--accent)',
+          borderRadius: '16px',
+          padding: '10px 20px',
           fontSize: '13px',
-          fontWeight: 700,
+          fontWeight: 750,
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          gap: '6px',
+          gap: '8px',
           letterSpacing: '0.02em',
           transition: 'all 0.2s',
           whiteSpace: 'nowrap',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
         }}
         onMouseOver={e => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #00d4a840, #00d4a820)'
-          e.currentTarget.style.borderColor = '#00d4a8'
+          e.currentTarget.style.background = 'var(--surface-raised)'
+          e.currentTarget.style.borderColor = 'var(--accent)'
         }}
         onMouseOut={e => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #00d4a820, #00d4a810)'
-          e.currentTarget.style.borderColor = '#00d4a840'
+          e.currentTarget.style.background = 'var(--surface)'
+          e.currentTarget.style.borderColor = 'var(--border)'
         }}
       >
-        <span>💧</span> Arc Faucet
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style={{ color: 'var(--accent)' }}>
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+        </svg>
+        <span>Arc Faucet</span>
       </button>
 
       {open && (

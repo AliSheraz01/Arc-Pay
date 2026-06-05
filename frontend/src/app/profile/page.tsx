@@ -37,6 +37,7 @@ export default function ProfilePage() {
   const isCorrectNetwork = chainId === ARC_CHAIN_ID
 
   const [usernameInput, setUsernameInput] = useState('')
+  const [approvedInSession, setApprovedInSession] = useState(false)
   const [step, setStep] = useState<'idle' | 'approving' | 'registering' | 'done'>('idle')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -83,10 +84,16 @@ export default function ProfilePage() {
     query: { enabled: !!regTxHash },
   })
 
+  // Reset approvedInSession if username input changes
+  useEffect(() => {
+    setApprovedInSession(false)
+  }, [usernameInput])
+
   // When approve succeeds, refetch allowance and reset step to idle
   useEffect(() => {
     if (approveSuccess) {
       refetchAllowance()
+      setApprovedInSession(true)
       setStep('idle')
     }
   }, [approveSuccess, refetchAllowance])
@@ -120,7 +127,7 @@ export default function ProfilePage() {
 
   const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toFixed(2) : '—'
   const hasEnoughBalance = usdcBalance !== undefined && (usdcBalance as bigint) >= REGISTRATION_FEE
-  const alreadyApproved = allowance !== undefined && (allowance as bigint) >= REGISTRATION_FEE
+  const alreadyApproved = (allowance !== undefined && (allowance as bigint) >= REGISTRATION_FEE) || approvedInSession
   const alreadyRegistered = !!(myUsername && (myUsername as string).length > 0)
 
   const validateUsername = (u: string) => {

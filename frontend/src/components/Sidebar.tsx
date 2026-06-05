@@ -11,7 +11,8 @@ import {
   Settings, 
   Sun, 
   Moon,
-  UserCircle,
+  Users,
+  Link2,
 } from 'lucide-react'
 
 export function Sidebar() {
@@ -29,8 +30,8 @@ export function Sidebar() {
     }
   }, [])
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+  const toggleTheme = (targetTheme?: 'dark' | 'light') => {
+    const nextTheme = targetTheme || (theme === 'dark' ? 'light' : 'dark')
     setTheme(nextTheme)
     localStorage.setItem('theme', nextTheme)
     document.documentElement.setAttribute('data-theme', nextTheme)
@@ -41,58 +42,48 @@ export function Sidebar() {
     { href: '/send', label: 'Send', icon: Send },
     { href: '/receive', label: 'Receive', icon: Download },
     { href: '/history', label: 'Transactions', icon: History },
-    { href: '/profile', label: 'Profile', icon: UserCircle },
+    { href: '#contacts', label: 'Contacts', icon: Users },
+    { href: '/receive?tab=request', label: 'Payment Links', icon: Link2 },
     { href: '/settings', label: 'Settings', icon: Settings },
   ]
 
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
         <div>
           {/* Logo */}
-          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
+          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px', paddingLeft: '8px' }}>
             <div style={{
-              width: '36px', height: '36px',
-              background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
-              borderRadius: '12px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '18px', color: 'white',
-              boxShadow: '0 0 16px #7c3aed40',
+              width: '38px', height: '38px',
+              background: 'var(--accent)',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(16, 53, 246, 0.25)',
             }}>
-              ⚡
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+              </svg>
             </div>
             <span style={{
               fontWeight: 900,
-              fontSize: '20px',
-              background: 'linear-gradient(135deg, #9f5aff, #00d4a8)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '-0.03em',
+              fontSize: '22px',
+              color: 'var(--accent)',
+              letterSpacing: '-0.04em',
             }}>
               Arc Pay
             </span>
           </Link>
 
-          {/* Network Indicator */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            background: 'var(--surface-raised)', border: '1px solid var(--border)',
-            borderRadius: '12px', padding: '8px 12px', marginBottom: '24px',
-          }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
-            <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>Live on Arc Testnet</span>
-          </div>
-
           {/* Navigation links */}
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {navItems.map(item => {
-              const isActive = pathname === item.href
+              const isActive = pathname === item.href || (item.href.startsWith('/receive?tab') && pathname === '/receive')
               const Icon = item.icon
               return (
                 <Link
-                  key={item.href}
+                  key={item.label}
                   href={item.href}
                   style={{
                     display: 'flex',
@@ -132,83 +123,125 @@ export function Sidebar() {
         {/* Bottom Panel */}
         <div>
           {/* Faucet Promo Card */}
-          <div style={{
-            background: 'var(--accent-glow)',
-            border: '1px solid var(--border-accent)',
-            borderRadius: '16px',
-            padding: '16px',
-            marginBottom: '16px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>💧</div>
-            <h4 style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 800, marginBottom: '4px' }}>Need gas?</h4>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '11px', lineHeight: 1.4, marginBottom: '10px' }}>
-              Get free test tokens from Circle faucet
-            </p>
-            <a 
-              href="https://faucet.circle.com" 
-              target="_blank" 
-              rel="noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                color: 'var(--accent)',
-                fontSize: '12px',
-                fontWeight: 700,
-                textDecoration: 'none',
-              }}
-            >
-              Arc Faucet →
-            </a>
-          </div>
-
-          {/* Theme switcher */}
-          <button
-            onClick={toggleTheme}
+          <a
+            href="https://faucet.circle.com"
+            target="_blank"
+            rel="noreferrer"
             style={{
-              width: '100%',
+              display: 'flex',
+              background: 'var(--accent-glow)',
+              border: '1px solid var(--border-accent)',
+              borderRadius: '16px',
+              padding: '16px',
+              marginBottom: '16px',
+              textDecoration: 'none',
+              color: 'var(--text-primary)',
+              position: 'relative',
+              overflow: 'hidden',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <div style={{ flex: 1 }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Need gas?</h4>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '11px', lineHeight: 1.4, marginBottom: '6px' }}>
+                Get test tokens from
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '12px', fontWeight: 800 }}>
+                <span>Arc Faucet</span>
+                <span style={{ fontSize: '12px' }}>→</span>
+              </div>
+            </div>
+            {/* Droplet Graphic */}
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '12px',
+              background: 'rgba(16, 53, 246, 0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '10px',
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border)',
-              borderRadius: '12px',
-              padding: '12px',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-            onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
-          >
-            {theme === 'dark' ? (
-              <>
-                <Sun size={16} style={{ color: '#f5c542' }} />
-                <span>Light Mode</span>
-              </>
-            ) : (
-              <>
-                <Moon size={16} style={{ color: '#7c3aed' }} />
-                <span>Dark Mode</span>
-              </>
-            )}
-          </button>
+              color: 'var(--accent)',
+              flexShrink: 0,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+              </svg>
+            </div>
+          </a>
+
+          {/* Theme switcher pill capsule */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border)',
+            borderRadius: '20px',
+            padding: '4px',
+            gap: '4px',
+            width: '100%',
+          }}>
+            <button
+              onClick={() => toggleTheme('light')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                background: theme === 'light' ? 'var(--surface)' : 'transparent',
+                border: theme === 'light' ? '1px solid var(--border)' : 'none',
+                borderRadius: '16px',
+                padding: '8px 12px',
+                color: theme === 'light' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: theme === 'light' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                transition: 'all 0.2s',
+              }}
+            >
+              <Sun size={14} style={{ color: '#f5c542' }} />
+              <span>Light</span>
+            </button>
+            <button
+              onClick={() => toggleTheme('dark')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                background: theme === 'dark' ? 'var(--surface)' : 'transparent',
+                border: theme === 'dark' ? '1px solid var(--border)' : 'none',
+                borderRadius: '16px',
+                padding: '8px 12px',
+                color: theme === 'dark' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: theme === 'dark' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                transition: 'all 0.2s',
+              }}
+            >
+              <Moon size={14} style={{ color: '#7c3aed' }} />
+              <span>Dark</span>
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Mobile Tab Bottom Navigation */}
-      <nav className="mobile-nav">
-        {navItems.map(item => {
+      <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
+        {navItems.slice(0, 4).concat(navItems.slice(-2)).map(item => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (
             <Link
-              key={item.href}
+              key={item.label}
               href={item.href}
               style={{
                 display: 'flex',

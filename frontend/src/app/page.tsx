@@ -99,13 +99,21 @@ export default function DashboardPage() {
     refetchInterval: 8000,
   })
 
+  const [approvedInSession, setApprovedInSession] = useState(false)
+
   const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
   const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
+
+  // Reset session approval if username input changes
+  useEffect(() => {
+    setApprovedInSession(false)
+  }, [usernameInput])
 
   // Trigger refetches after tx completion
   useEffect(() => {
     if (approveSuccess) {
       refetchAllowance()
+      setApprovedInSession(true)
     }
   }, [approveSuccess, refetchAllowance])
 
@@ -121,7 +129,8 @@ export default function DashboardPage() {
 
   const formattedBalance = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)).toFixed(2) : '0.00'
   const REGISTRATION_FEE = BigInt(1000000) // 1 USDC (6 decimals)
-  const hasAllowance = registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false
+  const hasAllowance = (registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false) || approvedInSession
+  const hasEnoughBalance = usdcBalance !== undefined ? (usdcBalance as bigint) >= REGISTRATION_FEE : false
 
   async function handleApproveUSDC() {
     setRegError('')
@@ -184,7 +193,7 @@ export default function DashboardPage() {
 
             <h1 style={{
               fontSize: '44px', fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--accent-bright) 50%, var(--green) 100%)',
+              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--accent-bright) 50%, var(--accent) 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
               letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '16px',
             }}>
@@ -222,7 +231,7 @@ export default function DashboardPage() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 1fr',
+            gridTemplateColumns: '2.1fr 1fr',
             gap: '24px',
             maxWidth: '1200px',
             margin: '0 auto',
@@ -242,40 +251,40 @@ export default function DashboardPage() {
                 alignItems: 'center',
                 position: 'relative',
                 overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', zIndex: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Total Balance
                     </span>
                     <button 
                       onClick={() => setHideBalance(!hideBalance)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
                     >
-                      {hideBalance ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {hideBalance ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <span style={{ fontSize: '48px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '48px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
                       {balanceLoading ? '...' : hideBalance ? '••••••' : formattedBalance}
                     </span>
                     <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)' }}>USDC</span>
                   </div>
 
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '24px', display: 'block' }}>
                     {balanceLoading ? '...' : hideBalance ? '$••••••' : `$${formattedBalance} USD`}
                   </span>
 
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                  <div style={{ display: 'flex', gap: '12px' }}>
                     <Link href="/send" style={{ textDecoration: 'none' }}>
                       <button style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
-                        border: 'none', borderRadius: '12px', padding: '12px 24px',
+                        background: 'var(--accent)',
+                        border: 'none', borderRadius: '16px', padding: '12px 28px',
                         color: 'white', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(124, 58, 237, 0.25)', transition: 'all 0.2s',
+                        boxShadow: '0 4px 14px rgba(16, 53, 246, 0.2)', transition: 'all 0.2s',
                       }}
                         onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
                         onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
@@ -283,76 +292,54 @@ export default function DashboardPage() {
                         <SendIcon size={14} /> Send
                       </button>
                     </Link>
-                    <Link href="/receive" style={{ textDecoration: 'none' }}>
+                    <Link href="/receive?tab=qr" style={{ textDecoration: 'none' }}>
                       <button style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
                         background: 'transparent', border: '1px solid var(--border)',
-                        borderRadius: '12px', padding: '12px 24px',
-                        color: 'var(--text-primary)', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
+                        borderRadius: '16px', padding: '12px 24px',
+                        color: 'var(--accent)', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
                         transition: 'all 0.2s',
                       }}
                         onMouseOver={e => e.currentTarget.style.background = 'var(--surface-raised)'}
                         onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                       >
-                        <ReceiveIcon size={14} /> Receive
+                        <QrCode size={14} /> Receive
                       </button>
                     </Link>
                   </div>
                 </div>
 
-                {/* Radar Pulse Graphic */}
+                {/* Radar Concentric Circles Graphic */}
                 <div style={{
-                  width: '120px',
-                  height: '120px',
-                  borderRadius: '50%',
-                  background: 'var(--surface-raised)',
-                  border: '1px solid var(--border)',
+                  width: '140px',
+                  height: '140px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   position: 'relative',
                   zIndex: 2,
-                  boxShadow: '0 0 30px var(--accent-glow)'
+                  marginRight: '16px',
                 }}>
-                  {/* Glowing Pulse Rings */}
+                  {/* Faint circles */}
+                  <div style={{ position: 'absolute', width: '130px', height: '130px', borderRadius: '50%', border: '1px dashed rgba(16, 53, 246, 0.15)' }} />
+                  <div style={{ position: 'absolute', width: '100px', height: '100px', borderRadius: '50%', border: '1px solid rgba(16, 53, 246, 0.08)' }} />
+                  <div style={{ position: 'absolute', width: '70px', height: '70px', borderRadius: '50%', border: '1px solid rgba(16, 53, 246, 0.1)' }} />
+                  {/* Center Logo Bubble */}
                   <div style={{
-                    position: 'absolute',
-                    width: '100%',
-                    height: '100%',
+                    width: '54px',
+                    height: '54px',
                     borderRadius: '50%',
-                    border: '2px solid var(--accent)',
-                    animation: 'radar-pulse 2s infinite ease-in-out',
-                    opacity: 0.5,
-                  }} />
-
-                  {/* Arc Icon logo */}
-                  <div style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                    background: 'var(--accent)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 4px 16px rgba(124, 58, 237, 0.4)'
+                    boxShadow: '0 4px 16px rgba(16, 53, 246, 0.3)'
                   }}>
-                    <span style={{ fontSize: '28px', color: 'white', fontWeight: 900 }}>⚡</span>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+                    </svg>
                   </div>
                 </div>
-
-                {/* Radar animation style */}
-                <style jsx global>{`
-                  @keyframes radar-pulse {
-                    0% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.3); }
-                    70% { transform: scale(1.4); opacity: 0; box-shadow: 0 0 0 15px rgba(124, 58, 237, 0); }
-                    100% { transform: scale(1.4); opacity: 0; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
-                  }
-                  @media (max-width: 768px) {
-                    .dashboard-grid {
-                      grid-template-columns: 1fr !important;
-                    }
-                  }
-                `}</style>
               </div>
 
               {/* Profile Registration / Status Section */}
@@ -361,11 +348,11 @@ export default function DashboardPage() {
                 border: '1px solid var(--border)',
                 borderRadius: '24px',
                 padding: '28px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <User size={18} style={{ color: 'var(--accent)' }} />
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '16px' }}>My Profile</h3>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>My Profile</h3>
                 </div>
 
                 {myUsername ? (
@@ -381,7 +368,7 @@ export default function DashboardPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{
                         width: '48px', height: '48px', borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                        background: 'var(--accent)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '20px', fontWeight: 900, color: 'white'
                       }}>
@@ -395,7 +382,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <span style={{
-                      background: 'rgba(0, 212, 168, 0.1)', border: '1px solid rgba(0, 212, 168, 0.3)',
+                      background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)',
                       color: 'var(--green)', borderRadius: '20px', padding: '6px 14px', fontSize: '12px', fontWeight: 700
                     }}>
                       Active
@@ -403,9 +390,15 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.5, marginBottom: '20px' }}>
-                      Claim a customized **@username** for your wallet. It costs a one-time transaction of **1 USDC** to register.
-                    </p>
+                    <div style={{
+                      background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
+                      borderRadius: '12px', padding: '12px 16px', marginBottom: '16px',
+                    }}>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
+                        Your current balance: <strong style={{ color: hasEnoughBalance ? 'var(--green)' : 'var(--red)' }}>{formattedBalance} USDC</strong>
+                        {!hasEnoughBalance && <><br /><span style={{ color: 'var(--red)', fontWeight: 'bold' }}>⚠️ Insufficient USDC balance. You need at least 1 USDC to register.</span></>}
+                      </p>
+                    </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <div style={{ position: 'relative' }}>
@@ -462,29 +455,30 @@ export default function DashboardPage() {
 
                       {!hasAllowance ? (
                         <button
-                          disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                          disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
                           onClick={handleApproveUSDC}
                           style={{
                             width: '100%',
-                            background: usernameInput ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                            background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
                             border: 'none', borderRadius: '12px', padding: '14px 16px',
-                            color: usernameInput ? 'white' : 'var(--text-secondary)',
-                            fontSize: '15px', fontWeight: 800, cursor: usernameInput ? 'pointer' : 'not-allowed',
-                            boxShadow: usernameInput ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                            color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
+                            fontSize: '15px', fontWeight: 800, cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
+                            boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(16, 53, 246, 0.2)' : 'none',
                           }}
                         >
                           Step 1: Approve 1 USDC Fee
                         </button>
                       ) : (
                         <button
-                          disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                          disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
                           onClick={handleRegisterUsername}
                           style={{
                             width: '100%',
-                            background: 'linear-gradient(135deg, #00d4a8, #00b896)',
+                            background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #00d4a8, #00b896)' : 'var(--border)',
                             border: 'none', borderRadius: '12px', padding: '14px 16px',
-                            color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(0, 212, 168, 0.25)',
+                            color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
+                            fontSize: '15px', fontWeight: 800, cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
+                            boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(0, 212, 168, 0.25)' : 'none',
                           }}
                         >
                           Step 2: Register Username (1 USDC)
@@ -501,10 +495,10 @@ export default function DashboardPage() {
                 border: '1px solid var(--border)',
                 borderRadius: '24px',
                 padding: '28px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '16px' }}>Recent Activity</h3>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>Recent Transactions</h3>
                   <Link href="/history" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 700 }}>
                     View all
                   </Link>
@@ -539,26 +533,25 @@ export default function DashboardPage() {
                         >
                           <div style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
-                            background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                            borderRadius: '16px', padding: '14px 16px', transition: 'border-color 0.2s',
+                            background: 'var(--surface)', border: '1px solid var(--border)',
+                            borderRadius: '16px', padding: '14px 16px', transition: 'all 0.2s',
                           }}
                             onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                             onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
                           >
                             {/* Icon */}
                             <div style={{
-                              width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                              background: isSent ? 'var(--red-glow)' : 'var(--green-glow)',
-                              border: `1px solid ${isSent ? 'rgba(255,68,102,0.2)' : 'rgba(0,212,168,0.2)'}`,
+                              width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                              background: isSent ? 'rgba(16, 53, 246, 0.08)' : 'rgba(0, 212, 168, 0.08)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: isSent ? 'var(--red)' : 'var(--green)',
+                              color: isSent ? 'var(--accent)' : 'var(--green)',
                             }}>
                               {isSent ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
                             </div>
 
                             {/* Details */}
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {isSent ? 'Sent to' : 'Received from'} {counterparty.slice(0, 6)}…{counterparty.slice(-4)}
                               </div>
                               <div style={{ color: 'var(--text-secondary)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
@@ -566,15 +559,29 @@ export default function DashboardPage() {
                               </div>
                             </div>
 
-                            {/* Amount */}
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            {/* Amount & Status */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <span style={{
+                                  fontWeight: 800, fontSize: '14px',
+                                  color: 'var(--text-primary)',
+                                }}>
+                                  {isSent ? '-' : '+'}{amountFormatted}
+                                </span>
+                                <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px', fontWeight: 600 }}>USDC</span>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>2m ago</div>
+                              </div>
                               <span style={{
-                                fontWeight: 800, fontSize: '14px',
-                                color: isSent ? 'var(--red)' : 'var(--green)',
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                color: 'var(--green)',
+                                borderRadius: '20px',
+                                padding: '4px 10px',
+                                fontSize: '11px',
+                                fontWeight: 700,
                               }}>
-                                {isSent ? '-' : '+'}{amountFormatted}
+                                Completed
                               </span>
-                              <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px', fontWeight: 600 }}>USDC</span>
                             </div>
                           </div>
                         </a>
@@ -593,14 +600,14 @@ export default function DashboardPage() {
                 border: '1px solid var(--border)',
                 borderRadius: '24px',
                 padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <QuickActionRow href="/send" icon={SendIcon} label="Send to @username" />
-                  <QuickActionRow href="/receive" icon={QrCode} label="Scan QR Code" />
-                  <QuickActionRow href="/receive" icon={Link2} label="Create Payment Link" />
-                  <QuickActionRow href="/receive" icon={Coins} label="Request Payment" />
+                  <QuickActionRow href="/receive?tab=qr" icon={QrCode} label="Scan QR Code" />
+                  <QuickActionRow href="/receive?tab=request" icon={Link2} label="Create Payment Link" />
+                  <QuickActionRow href="/receive?tab=request" icon={Coins} label="Request Payment" />
                 </div>
               </div>
 
@@ -610,13 +617,13 @@ export default function DashboardPage() {
                 border: '1px solid var(--border)',
                 borderRadius: '24px',
                 padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Arc Network</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <NetworkRow label="Network Status" value={<><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)', display: 'inline-block', marginRight: '6px' }} />Connected</>} />
-                  <NetworkRow label="Chain ID" value="5042002" />
-                  <NetworkRow label="RPC URL" value="rpc.testnet.arc.network" />
+                  <NetworkRow label="Chain ID" value={chainId ? chainId.toString() : "5042002"} />
+                  <NetworkRow label="RPC" value="arc-testnet.rpc.com" />
                 </div>
               </div>
 
@@ -626,7 +633,7 @@ export default function DashboardPage() {
                 border: '1px solid var(--border)',
                 borderRadius: '24px',
                 padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Get Started</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -666,9 +673,9 @@ function QuickActionRow({ href, icon: Icon, label }: { href: string; icon: any; 
           }}>
             <Icon size={16} />
           </div>
-          <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{label}</span>
+          <span style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 800 }}>{label}</span>
         </div>
-        <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+        <ChevronRight size={16} style={{ color: 'var(--text-secondary)' }} />
       </div>
     </Link>
   )
@@ -677,8 +684,8 @@ function QuickActionRow({ href, icon: Icon, label }: { href: string; icon: any; 
 function NetworkRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700 }}>{value}</span>
+      <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 700 }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 800 }}>{value}</span>
     </div>
   )
 }

@@ -5,13 +5,13 @@
   --surface: #111118;
   --surface-raised: #1a1a24;
   --border: #2a2a3a;
-  --border-accent: #7c3aed40;
+  --border-accent: #2563eb40;
   --text-primary: #f0f0ff;
   --text-secondary: #8888aa;
   --text-muted: #55556a;
-  --accent: #7c3aed;
-  --accent-bright: #9f5aff;
-  --accent-glow: #7c3aed30;
+  --accent: #2563eb; /* Royal Blue */
+  --accent-bright: #3b82f6;
+  --accent-glow: #2563eb30;
   --green: #00d4a8;
   --green-glow: #00d4a820;
   --red: #ff4466;
@@ -51,7 +51,7 @@ html {
 body {
   background-color: var(--background);
   color: var(--text-primary);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-outfit), system-ui, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -98,8 +98,8 @@ body {
 
 /* Animated gradient border */
 @keyframes border-glow {
-  0%, 100% { border-color: #7c3aed40; }
-  50% { border-color: #7c3aed80; }
+  0%, 100% { border-color: var(--border-accent); }
+  50% { border-color: var(--accent); }
 }
 
 .border-animated {

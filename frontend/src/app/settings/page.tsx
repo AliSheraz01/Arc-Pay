@@ -46,12 +46,20 @@ export default function SettingsPage() {
     query: { enabled: !!address },
   })
 
+  const [approvedInSession, setApprovedInSession] = useState(false)
+
   const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
   const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
+
+  // Reset session approval if username input changes
+  useEffect(() => {
+    setApprovedInSession(false)
+  }, [usernameInput])
 
   useEffect(() => {
     if (approveSuccess) {
       refetchAllowance()
+      setApprovedInSession(true)
     }
   }, [approveSuccess, refetchAllowance])
 
@@ -65,7 +73,7 @@ export default function SettingsPage() {
   }, [regSuccess, refetch, refetchBalance])
 
   const REGISTRATION_FEE = BigInt(1000000) // 1 USDC
-  const hasAllowance = registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false
+  const hasAllowance = (registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false) || approvedInSession
   const hasEnoughBalance = usdcBalance !== undefined ? (usdcBalance as bigint) >= REGISTRATION_FEE : false
   const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toFixed(2) : '0.00'
 

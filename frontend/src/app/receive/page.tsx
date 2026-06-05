@@ -1,21 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useAccount } from 'wagmi'
 import { QRCodeSVG } from 'qrcode.react'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { BACKEND_URL } from '@/lib/constants'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Copy, Check, QrCode, Coins, Link2 } from 'lucide-react'
 
-export default function ReceivePage() {
+function ReceiveForm() {
   const { address, isConnected } = useAccount()
+  const searchParams = useSearchParams()
+  
   const [requestAmount, setRequestAmount] = useState('')
   const [requestMemo, setRequestMemo] = useState('')
   const [requestCreated, setRequestCreated] = useState(false)
   const [requestId, setRequestId] = useState('')
-  const [tab, setTab] = useState<'qr' | 'request'>('qr')
+  const [tab, setTab] = useState<'qr' | 'request'>(() => {
+    const t = searchParams.get('tab')
+    return t === 'request' ? 'request' : 'qr'
+  })
   const [copied, setCopied] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
 
@@ -37,11 +43,14 @@ export default function ReceivePage() {
           memo: requestMemo,
         }),
       })
+      if (!res.ok) throw new Error('Backend failed')
       const data = await res.json()
       setRequestId(data.id)
       setRequestCreated(true)
     } catch (err) {
-      console.error('Failed to create request', err)
+      console.warn('Failed to create backend request, falling back to direct client-side link:', err)
+      setRequestId('direct')
+      setRequestCreated(true)
     }
   }
 
@@ -66,9 +75,11 @@ export default function ReceivePage() {
     )
   }
 
-  const shareableRequestLink = requestId 
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/pay/${requestId}` 
-    : ''
+  const shareableRequestLink = requestId === 'direct'
+    ? paymentLink
+    : (requestId 
+      ? `${typeof window !== 'undefined' ? window.location.origin : ''}/pay/${requestId}` 
+      : '')
 
   return (
     <PageLayout>
@@ -90,11 +101,11 @@ export default function ReceivePage() {
                 onClick={() => setTab(t)}
                 style={{
                   flex: 1, padding: '12px', borderRadius: '12px', border: 'none',
-                  background: tab === t ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'transparent',
+                  background: tab === t ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'transparent',
                   color: tab === t ? 'white' : 'var(--text-secondary)',
                   fontSize: '14px', fontWeight: 700, cursor: 'pointer',
                   transition: 'all 0.2s',
-                  boxShadow: tab === t ? '0 4px 12px rgba(124, 58, 237, 0.25)' : 'none',
+                  boxShadow: tab === t ? '0 4px 12px rgba(16, 53, 246, 0.25)' : 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
@@ -125,7 +136,7 @@ export default function ReceivePage() {
                 borderRadius: '20px',
                 padding: '24px',
                 marginBottom: '28px',
-                boxShadow: '0 8px 30px rgba(124, 58, 237, 0.15)',
+                boxShadow: '0 8px 30px rgba(16, 53, 246, 0.15)',
                 border: '1px solid var(--border)'
               }}>
                 <QRCodeSVG
@@ -241,12 +252,12 @@ export default function ReceivePage() {
                     disabled={!requestAmount || parseFloat(requestAmount) <= 0}
                     style={{
                       width: '100%',
-                      background: requestAmount && parseFloat(requestAmount) > 0 ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                      background: requestAmount && parseFloat(requestAmount) > 0 ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
                       border: 'none', borderRadius: '12px', padding: '16px',
                       color: requestAmount && parseFloat(requestAmount) > 0 ? 'white' : 'var(--text-secondary)',
                       fontSize: '15px', fontWeight: 800,
                       cursor: requestAmount && parseFloat(requestAmount) > 0 ? 'pointer' : 'not-allowed',
-                      boxShadow: requestAmount && parseFloat(requestAmount) > 0 ? '0 4px 16px rgba(124, 58, 237, 0.25)' : 'none',
+                      boxShadow: requestAmount && parseFloat(requestAmount) > 0 ? '0 4px 16px rgba(16, 53, 246, 0.25)' : 'none',
                       marginTop: '12px'
                     }}
                   >
@@ -301,5 +312,19 @@ export default function ReceivePage() {
         </NetworkGuard>
       </main>
     </PageLayout>
+  )
+}
+
+export default function ReceivePage() {
+  return (
+    <Suspense fallback={
+      <PageLayout>
+        <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      </PageLayout>
+    }>
+      <ReceiveForm />
+    </Suspense>
   )
 }

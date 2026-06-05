@@ -1,24 +1,27 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, Suspense } from 'react'
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, isAddress } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { USDC_ADDRESS, ROUTER_ADDRESS, EXPLORER_URL, BACKEND_URL } from '@/lib/constants'
 import { USDC_ABI, ROUTER_ABI } from '@/lib/abi'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Clock, CheckCircle, Search, AlertCircle } from 'lucide-react'
 
 type Step = 'form' | 'confirm' | 'success'
 
-export default function SendPage() {
+function SendForm() {
   const { address, isConnected } = useAccount()
+  const searchParams = useSearchParams()
+
   const [step, setStep] = useState<Step>('form')
-  const [recipient, setRecipient] = useState('')
+  const [recipient, setRecipient] = useState(() => searchParams.get('to') || '')
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
-  const [amount, setAmount] = useState('')
-  const [memo, setMemo] = useState('')
+  const [amount, setAmount] = useState(() => searchParams.get('amount') || '')
+  const [memo, setMemo] = useState(() => searchParams.get('memo') || '')
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState('')
   const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
@@ -71,6 +74,14 @@ export default function SendPage() {
       setResolving(false)
     }
   }, [])
+
+  // Auto-resolve on mount if query param is set
+  useEffect(() => {
+    const initialTo = searchParams.get('to')
+    if (initialTo) {
+      resolveRecipient(initialTo)
+    }
+  }, [searchParams, resolveRecipient])
 
   async function handleSend() {
     if (!resolvedAddress || !isValidAmount) return
@@ -226,12 +237,12 @@ export default function SendPage() {
                 onClick={() => setStep('confirm')}
                 style={{
                   width: '100%',
-                  background: resolvedAddress && isValidAmount ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                  background: resolvedAddress && isValidAmount ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
                   border: 'none', borderRadius: '12px', padding: '16px',
                   color: resolvedAddress && isValidAmount ? 'white' : 'var(--text-secondary)',
                   fontSize: '15px', fontWeight: 800,
                   cursor: resolvedAddress && isValidAmount ? 'pointer' : 'not-allowed',
-                  boxShadow: resolvedAddress && isValidAmount ? '0 4px 16px rgba(124, 58, 237, 0.25)' : 'none',
+                  boxShadow: resolvedAddress && isValidAmount ? '0 4px 16px rgba(16, 53, 246, 0.25)' : 'none',
                 }}
               >
                 Continue
@@ -313,10 +324,10 @@ export default function SendPage() {
                   disabled={phase !== 'idle'}
                   onClick={handleSend}
                   style={{
-                    flex: 1, background: 'linear-gradient(135deg, #7c3aed, #9f5aff)', border: 'none',
+                    flex: 1, background: 'linear-gradient(135deg, #1035f6, #3b82f6)', border: 'none',
                     borderRadius: '12px', padding: '14px', color: 'white',
                     fontSize: '15px', fontWeight: 800, cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(124, 58, 237, 0.25)',
+                    boxShadow: '0 4px 16px rgba(16, 53, 246, 0.25)',
                   }}
                 >
                   Confirm & Send
@@ -353,7 +364,7 @@ export default function SendPage() {
 
               <Link href="/" style={{ textDecoration: 'none' }}>
                 <button style={{
-                  width: '100%', background: 'linear-gradient(135deg, #7c3aed, #9f5aff)',
+                  width: '100%', background: 'linear-gradient(135deg, #1035f6, #3b82f6)',
                   border: 'none', borderRadius: '12px', padding: '16px',
                   color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
                 }}>
@@ -365,5 +376,19 @@ export default function SendPage() {
         </NetworkGuard>
       </main>
     </PageLayout>
+  )
+}
+
+export default function SendPage() {
+  return (
+    <Suspense fallback={
+      <PageLayout>
+        <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      </PageLayout>
+    }>
+      <SendForm />
+    </Suspense>
   )
 }

@@ -1,6 +1,13 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { WalletProvider } from '@/components/WalletProvider'
+import { Outfit } from 'next/font/google'
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-outfit',
+})
 
 export const metadata: Metadata = {
   title: 'ArcPay — Instant USDC Payments on Arc Network',
@@ -13,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body suppressHydrationWarning style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+    <html lang="en" className={`${outfit.variable}`} suppressHydrationWarning>
+      <body suppressHydrationWarning style={{ fontFamily: 'var(--font-outfit), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
         <WalletProvider>
           {children}
         </WalletProvider>
@@ -22,3 +29,4 @@ export default function RootLayout({
     </html>
   )
 }
+

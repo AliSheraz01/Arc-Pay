@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 
-const REGISTRATION_FEE = parseUnits('1', 18) // 1 USDC
+const REGISTRATION_FEE = parseUnits('1', 6) // 1 USDC
 
 export default function ProfilePage() {
   const { address, isConnected } = useAccount()
@@ -119,7 +119,7 @@ export default function ProfilePage() {
     refetchInterval: 15000,
   })
 
-  const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 18)).toFixed(2) : '—'
+  const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toFixed(2) : '—'
   const hasEnoughBalance = usdcBalance !== undefined && (usdcBalance as bigint) >= REGISTRATION_FEE
   const alreadyApproved = allowance !== undefined && (allowance as bigint) >= REGISTRATION_FEE
   const alreadyRegistered = !!(myUsername && (myUsername as string).length > 0)

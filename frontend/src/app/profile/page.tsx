@@ -72,7 +72,7 @@ export default function ProfilePage() {
   })
 
   // Wait for approve tx
-  const { data: approveReceipt } = useWaitForTransactionReceipt({
+  const { isSuccess: approveSuccess } = useWaitForTransactionReceipt({
     hash: approveTxHash,
     query: { enabled: !!approveTxHash },
   })
@@ -83,14 +83,13 @@ export default function ProfilePage() {
     query: { enabled: !!regTxHash },
   })
 
-  // When approve receipt lands, proceed to register
+  // When approve succeeds, refetch allowance and reset step to idle
   useEffect(() => {
-    if (approveReceipt && step === 'approving') {
+    if (approveSuccess) {
       refetchAllowance()
-      handleRegister()
+      setStep('idle')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approveReceipt])
+  }, [approveSuccess, refetchAllowance])
 
   // When register receipt lands, mark done
   useEffect(() => {
@@ -140,7 +139,7 @@ export default function ProfilePage() {
         address: REGISTRY_ADDRESS,
         abi: REGISTRY_ABI,
         functionName: 'registerUsername',
-        args: [usernameInput.toLowerCase().trim()],
+        args: [usernameInput.toLowerCase().trim().replace('@', '')],
       })
       setRegTxHash(hash)
     } catch (e: unknown) {
@@ -537,8 +536,10 @@ export default function ProfilePage() {
                     <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Approving USDC…</>
                   ) : step === 'registering' ? (
                     <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Registering on-chain…</>
+                  ) : !alreadyApproved ? (
+                    <><User size={18} /> Step 1: Approve 1 USDC Fee</>
                   ) : (
-                    <><User size={18} /> Register @{usernameInput || 'username'} · 1 USDC</>
+                    <><User size={18} /> Step 2: Register @{usernameInput.replace('@', '') || 'username'} · 1 USDC</>
                   )}
                 </button>
 

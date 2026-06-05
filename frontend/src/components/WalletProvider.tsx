@@ -1,7 +1,7 @@
 'use client'
 
 import '@rainbow-me/rainbowkit/styles.css'
-import { RainbowKitProvider, darkTheme, connectorsForWallets } from '@rainbow-me/rainbowkit'
+import { RainbowKitProvider, darkTheme, lightTheme, connectorsForWallets } from '@rainbow-me/rainbowkit'
 import {
   metaMaskWallet,
   coinbaseWallet,
@@ -126,18 +126,48 @@ class WalletErrorBoundary extends React.Component<
 }
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const [activeTheme, setActiveTheme] = React.useState<'dark' | 'light'>('light')
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const getInitialTheme = () => {
+      const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null
+      if (savedTheme) return savedTheme
+      const attr = document.documentElement.getAttribute('data-theme')
+      return attr === 'dark' ? 'dark' : 'light'
+    }
+    setActiveTheme(getInitialTheme())
+
+    const observer = new MutationObserver(() => {
+      const attr = document.documentElement.getAttribute('data-theme')
+      setActiveTheme(attr === 'dark' ? 'dark' : 'light')
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <WalletErrorBoundary>
       <WagmiProvider config={config} reconnectOnMount={true}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
-            theme={darkTheme({
-              accentColor: '#7c3aed',
-              accentColorForeground: 'white',
-              borderRadius: 'large',
-              fontStack: 'system',
-              overlayBlur: 'small',
-            })}
+            theme={
+              activeTheme === 'dark'
+                ? darkTheme({
+                    accentColor: '#1035f6', // Match our royal blue accent
+                    accentColorForeground: 'white',
+                    borderRadius: 'large',
+                    fontStack: 'system',
+                    overlayBlur: 'small',
+                  })
+                : lightTheme({
+                    accentColor: '#1035f6', // Match our royal blue accent
+                    accentColorForeground: 'white',
+                    borderRadius: 'large',
+                    fontStack: 'system',
+                    overlayBlur: 'small',
+                  })
+            }
             locale="en-US"
           >
             {children}

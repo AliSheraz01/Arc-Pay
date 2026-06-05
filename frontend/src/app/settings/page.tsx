@@ -66,6 +66,8 @@ export default function SettingsPage() {
 
   const REGISTRATION_FEE = BigInt(1000000) // 1 USDC
   const hasAllowance = registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false
+  const hasEnoughBalance = usdcBalance !== undefined ? (usdcBalance as bigint) >= REGISTRATION_FEE : false
+  const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toFixed(2) : '0.00'
 
   async function handleApproveUSDC() {
     setRegError('')
@@ -167,6 +169,15 @@ export default function SettingsPage() {
                   Register a unique **@username** so others can send you USDC without copy-pasting your address.
                   Creating a username requires a transaction of **1 USDC**.
                 </p>
+                <div style={{
+                  background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
+                  borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
+                }}>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
+                    Your current balance: <strong style={{ color: hasEnoughBalance ? 'var(--green)' : 'var(--red)' }}>{formattedBalance} USDC</strong>
+                    {!hasEnoughBalance && <><br /><span style={{ color: 'var(--red)', fontWeight: 'bold' }}>⚠️ Insufficient USDC balance. You need at least 1 USDC to register.</span></>}
+                  </p>
+                </div>
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ position: 'relative' }}>
                     <span style={{
@@ -218,32 +229,32 @@ export default function SettingsPage() {
 
                 {!hasAllowance ? (
                   <button
-                    disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                    disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
                     onClick={handleApproveUSDC}
                     style={{
                       width: '100%',
-                      background: usernameInput ? 'linear-gradient(135deg, #7c3aed, #9f5aff)' : 'var(--border)',
+                      background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
                       border: 'none', borderRadius: '12px', padding: '14px',
-                      color: usernameInput ? 'white' : 'var(--text-secondary)',
+                      color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
                       fontSize: '15px', fontWeight: 800,
-                      cursor: usernameInput ? 'pointer' : 'not-allowed',
-                      boxShadow: usernameInput ? '0 4px 12px rgba(124, 58, 237, 0.2)' : 'none',
+                      cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
+                      boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(16, 53, 246, 0.2)' : 'none',
                     }}
                   >
                     Step 1: Approve 1 USDC Fee
                   </button>
                 ) : (
                   <button
-                    disabled={!usernameInput || registering || waitingApprove || waitingReg}
+                    disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
                     onClick={handleRegister}
                     style={{
                       width: '100%',
-                      background: 'linear-gradient(135deg, #00d4a8, #00b896)',
+                      background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #00d4a8, #00b896)' : 'var(--border)',
                       border: 'none', borderRadius: '12px', padding: '14px',
-                      color: 'white',
+                      color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
                       fontSize: '15px', fontWeight: 800,
-                      cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(0, 212, 168, 0.25)',
+                      cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
+                      boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(0, 212, 168, 0.25)' : 'none',
                     }}
                   >
                     Step 2: Register Username (1 USDC)

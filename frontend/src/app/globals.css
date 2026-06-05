@@ -24,18 +24,18 @@ html[data-theme="light"] {
   --surface: #ffffff;
   --surface-raised: #f8fafc;
   --border: #e2e8f0;
-  --border-accent: #7c3aed20;
+  --border-accent: #1035f620;
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  --accent: #7c3aed;
-  --accent-bright: #9f5aff;
-  --accent-glow: #7c3aed10;
-  --green: #0d9488;
-  --green-glow: #0d948810;
+  --accent: #1035f6; /* Royal Blue */
+  --accent-bright: #3b82f6;
+  --accent-glow: #1035f612;
+  --green: #10b981;
+  --green-glow: #10b98115;
   --red: #ef4444;
-  --red-glow: #ef444410;
-  --yellow: #ca8a04;
+  --red-glow: #ef444415;
+  --yellow: #f59e0b;
 }
 
 * {

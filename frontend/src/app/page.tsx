@@ -630,9 +630,7 @@ export default function DashboardPage() {
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Get Started</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <HelpRow href="https://testnet.arcscan.app" label="Learn about Arc" />
-                  <HelpRow href="https://testnet.arcscan.app" label="Bridge to Arc" />
-                  <HelpRow href="https://testnet.arcscan.app" label="View Docs" />
+                  <HelpRow href="https://www.arc.network/" label="Learn about Arc" />
                 </div>
               </div>
             </div>

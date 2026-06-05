@@ -16,7 +16,7 @@ import {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light'>('light')
 
   // Load theme on mount
   useEffect(() => {
@@ -25,7 +25,7 @@ export function Sidebar() {
       setTheme(savedTheme)
       document.documentElement.setAttribute('data-theme', savedTheme)
     } else {
-      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-theme', 'light')
     }
   }, [])
 

@@ -46,17 +46,17 @@ const connectors = connectorsForWallets(
     {
       groupName: 'Recommended',
       wallets: [
-        injectedWallet,
-        metaMaskWallet,
-        rabbyWallet,
-        coinbaseWallet,
-        trustWallet,
+        injectedWallet as any,
+        metaMaskWallet as any,
+        rabbyWallet as any,
+        coinbaseWallet as any,
+        trustWallet as any,
       ],
     },
     ...(PROJECT_ID
       ? [{
           groupName: 'More',
-          wallets: [walletConnectWallet],
+          wallets: [walletConnectWallet as any],
         }]
       : []),
   ],

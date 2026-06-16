@@ -80,7 +80,8 @@ export default function HistoryPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {transactions.map(tx => {
                   const isSent = tx.fromAddress.toLowerCase() === address?.toLowerCase()
-                  const amountFormatted = (parseInt(tx.amount) / 1e6).toFixed(2)
+                  const rawAmt = tx.amount ? parseInt(tx.amount) : 0
+                  const amountFormatted = !isNaN(rawAmt) ? (rawAmt / 1e6).toFixed(2) : '0.00'
                   const counterparty = isSent ? tx.toAddress : tx.fromAddress
                   const date = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 

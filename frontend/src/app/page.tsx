@@ -521,7 +521,8 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {transactions.slice(0, 4).map(tx => {
                       const isSent = tx.fromAddress.toLowerCase() === address?.toLowerCase()
-                      const amountFormatted = (parseInt(tx.amount) / 1e6).toFixed(2)
+                      const rawAmt = tx.amount ? parseInt(tx.amount) : 0
+                      const amountFormatted = !isNaN(rawAmt) ? (rawAmt / 1e6).toFixed(2) : '0.00'
                       const counterparty = isSent ? tx.toAddress : tx.fromAddress
 
                       return (

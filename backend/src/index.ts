@@ -381,7 +381,7 @@ async function startIndexer() {
         const remaining = toBlock - lastProcessed;
         
         // Use large chunks for historical catch-up, smaller for near-tip polling
-        const CHUNK_SIZE = remaining > 10000n ? 50000n : 500n;
+        const CHUNK_SIZE = remaining > 10000n ? 5000n : 500n;
         
         let chunksProcessed = 0;
         for (let currentFrom = fromBlock; currentFrom <= toBlock; currentFrom += CHUNK_SIZE) {

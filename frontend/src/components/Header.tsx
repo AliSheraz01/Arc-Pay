@@ -71,7 +71,7 @@ export function Header() {
         <ConnectButton
           accountStatus="avatar"
           chainStatus="icon"
-          showBalance={true}
+          showBalance={false}
           label="Connect Wallet"
         />
       </div>

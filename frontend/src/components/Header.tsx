@@ -69,7 +69,7 @@ export function Header() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <FaucetModal />
         <ConnectButton
-          accountStatus="avatar"
+          accountStatus="address"
           chainStatus="icon"
           showBalance={false}
           label="Connect Wallet"

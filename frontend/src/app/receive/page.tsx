@@ -8,7 +8,7 @@ import { NetworkGuard } from '@/components/NetworkGuard'
 import { BACKEND_URL } from '@/lib/constants'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Copy, Check, QrCode, Coins, Link2 } from 'lucide-react'
+import { MdArrowBack, MdContentCopy, MdCheck, MdQrCode, MdMonetizationOn, MdLink } from 'react-icons/md'
 
 function ReceiveForm() {
   const { address, isConnected } = useAccount()
@@ -85,7 +85,7 @@ function ReceiveForm() {
     <PageLayout>
       <main style={{ maxWidth: '480px', margin: '0 auto' }}>
         <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontWeight: 600 }}>
-          <ArrowLeft size={16} /> Back to Dashboard
+          <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
         <NetworkGuard>
@@ -109,7 +109,7 @@ function ReceiveForm() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
-                {t === 'qr' ? <QrCode size={16} /> : <Coins size={16} />}
+                {t === 'qr' ? <MdQrCode size={16} /> : <MdMonetizationOn size={16} />}
                 {t === 'qr' ? 'My QR Code' : 'Request Money'}
               </button>
             ))}
@@ -166,7 +166,7 @@ function ReceiveForm() {
                   {address?.slice(0, 12)}…{address?.slice(-10)}
                 </span>
                 <span style={{ color: copied ? 'var(--green)' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? <MdCheck size={14} /> : <MdContentCopy size={14} />}
                   {copied ? 'Copied!' : 'Copy'}
                 </span>
               </div>
@@ -184,7 +184,7 @@ function ReceiveForm() {
                 onMouseOver={e => { if(!copiedLink) {e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--text-primary)'} }}
                 onMouseOut={e => { if(!copiedLink) {e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'} }}
               >
-                {copiedLink ? <Check size={14} /> : <Link2 size={14} />}
+                {copiedLink ? <MdCheck size={14} /> : <MdLink size={14} />}
                 {copiedLink ? 'Payment Link Copied!' : 'Copy Direct Payment Link'}
               </button>
             </div>
@@ -211,6 +211,9 @@ function ReceiveForm() {
                       Amount (USDC)
                     </label>
                     <div style={{ position: 'relative' }}>
+                      <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                        <MdMonetizationOn size={18} />
+                      </div>
                       <input
                         type="number"
                         placeholder="0.00"
@@ -218,7 +221,7 @@ function ReceiveForm() {
                         onChange={e => setRequestAmount(e.target.value)}
                         style={{
                           width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                          borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
+                          borderRadius: '12px', padding: '14px 16px 14px 44px', color: 'var(--text-primary)',
                           fontSize: '15px', outline: 'none', boxSizing: 'border-box',
                         }}
                         onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
@@ -283,7 +286,7 @@ function ReceiveForm() {
                       {shareableRequestLink}
                     </span>
                     <span style={{ color: copied ? 'var(--green)' : 'var(--accent)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      {copied ? <MdCheck size={16} /> : <MdContentCopy size={16} />}
                       {copied ? 'Copied!' : 'Copy'}
                     </span>
                   </div>

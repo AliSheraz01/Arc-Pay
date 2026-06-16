@@ -14,19 +14,19 @@ import {
 } from '@/lib/constants'
 import { USDC_ABI, REGISTRY_ABI } from '@/lib/abi'
 import {
-  User,
-  CheckCircle,
-  Copy,
-  ExternalLink,
-  Loader,
-  AlertCircle,
-  Sparkles,
-  ShieldCheck,
-  Coins,
-  AtSign,
-  Hash,
-  ArrowRight,
-} from 'lucide-react'
+  MdPerson,
+  MdCheckCircle,
+  MdContentCopy,
+  MdOpenInNew,
+  MdAutorenew,
+  MdErrorOutline,
+  MdAutoAwesome,
+  MdVerifiedUser,
+  MdMonetizationOn,
+  MdAlternateEmail,
+  MdTag,
+  MdArrowForward,
+} from 'react-icons/md'
 import { useQuery } from '@tanstack/react-query'
 
 const REGISTRATION_FEE = parseUnits('1', 6) // 1 USDC
@@ -256,7 +256,7 @@ export default function ProfilePage() {
                       <span style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)' }}>
                         @{myUsername as string}
                       </span>
-                      <ShieldCheck size={18} style={{ color: '#00d4a8' }} />
+                      <MdVerifiedUser size={18} style={{ color: '#00d4a8' }} />
                     </div>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verified Arc Identity</p>
                   </>
@@ -282,7 +282,7 @@ export default function ProfilePage() {
                 gap: '12px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                  <Hash size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                  <MdTag size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                   <span style={{
                     fontFamily: 'monospace', fontSize: '14px',
                     color: 'var(--text-primary)', fontWeight: 600,
@@ -304,7 +304,7 @@ export default function ProfilePage() {
                       transition: 'all 0.2s',
                     }}
                   >
-                    <Copy size={13} />
+                    <MdContentCopy size={13} />
                     {copied ? 'Copied!' : 'Copy'}
                   </button>
                   <a
@@ -319,7 +319,7 @@ export default function ProfilePage() {
                       textDecoration: 'none', transition: 'all 0.2s',
                     }}
                   >
-                    <ExternalLink size={13} />
+                    <MdOpenInNew size={13} />
                     Explorer
                   </a>
                 </div>
@@ -333,9 +333,9 @@ export default function ProfilePage() {
             gap: '12px', marginBottom: '24px',
           }}>
             {[
-              { label: 'USDC Balance', value: `$${formattedBalance}`, icon: <Coins size={18} style={{ color: '#00d4a8' }} /> },
-              { label: 'Sent', value: txData ? `${txData.sent} txs` : '—', icon: <ArrowRight size={18} style={{ color: '#7c3aed' }} /> },
-              { label: 'Received', value: txData ? `${txData.received} txs` : '—', icon: <ArrowRight size={18} style={{ color: '#f59e0b', transform: 'rotate(180deg)' }} /> },
+              { label: 'USDC Balance', value: `$${formattedBalance}`, icon: <MdMonetizationOn size={18} style={{ color: '#00d4a8' }} /> },
+              { label: 'Sent', value: txData ? `${txData.sent} txs` : '—', icon: <MdArrowForward size={18} style={{ color: '#7c3aed' }} /> },
+              { label: 'Received', value: txData ? `${txData.received} txs` : '—', icon: <MdArrowForward size={18} style={{ color: '#f59e0b', transform: 'rotate(180deg)' }} /> },
             ].map(stat => (
               <div key={stat.label} style={{
                 background: 'var(--surface-raised)', border: '1px solid var(--border)',
@@ -365,7 +365,7 @@ export default function ProfilePage() {
                 background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
                 borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <AtSign size={20} style={{ color: 'var(--accent)' }} />
+                <MdAlternateEmail size={20} style={{ color: 'var(--accent)' }} />
               </div>
               <div>
                 <h2 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2px' }}>
@@ -384,7 +384,7 @@ export default function ProfilePage() {
                 borderRadius: '16px', padding: '20px',
                 display: 'flex', alignItems: 'center', gap: '14px',
               }}>
-                <CheckCircle size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
+                <MdCheckCircle size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
                 <div>
                   <p style={{ color: '#00d4a8', fontWeight: 800, fontSize: '16px' }}>
                     @{myUsername as string}
@@ -401,7 +401,7 @@ export default function ProfilePage() {
                 borderRadius: '16px', padding: '20px',
                 display: 'flex', alignItems: 'center', gap: '14px',
               }}>
-                <Sparkles size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
+                <MdAutoAwesome size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
                 <div>
                   <p style={{ color: '#00d4a8', fontWeight: 800, fontSize: '16px' }}>
                     🎉 @{usernameInput.toLowerCase().trim()} registered!
@@ -416,7 +416,7 @@ export default function ProfilePage() {
                       rel="noreferrer"
                       style={{ color: 'var(--accent)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', textDecoration: 'none' }}
                     >
-                      View transaction <ExternalLink size={12} />
+                      View transaction <MdOpenInNew size={12} />
                     </a>
                   )}
                 </div>
@@ -430,7 +430,7 @@ export default function ProfilePage() {
                   borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
                   display: 'flex', gap: '10px', alignItems: 'flex-start',
                 }}>
-                  <AlertCircle size={16} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
+                  <MdErrorOutline size={16} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
                     Registering a username costs <strong style={{ color: 'var(--text-primary)' }}>1 USDC</strong> paid on-chain.
                     You will be asked to approve USDC spending first, then confirm the registration.
@@ -541,13 +541,13 @@ export default function ProfilePage() {
                   }}
                 >
                   {step === 'approving' ? (
-                    <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Approving USDC…</>
+                    <><MdAutorenew size={18} style={{ animation: 'spin 1s linear infinite' }} /> Approving USDC…</>
                   ) : step === 'registering' ? (
-                    <><Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Registering on-chain…</>
+                    <><MdAutorenew size={18} style={{ animation: 'spin 1s linear infinite' }} /> Registering on-chain…</>
                   ) : !alreadyApproved ? (
-                    <><User size={18} /> Step 1: Approve 1 USDC Fee</>
+                    <><MdPerson size={18} /> Step 1: Approve 1 USDC Fee</>
                   ) : (
-                    <><User size={18} /> Step 2: Register @{usernameInput.replace('@', '') || 'username'} · 1 USDC</>
+                    <><MdPerson size={18} /> Step 2: Register @{usernameInput.replace('@', '') || 'username'} · 1 USDC</>
                   )}
                 </button>
 
@@ -555,7 +555,7 @@ export default function ProfilePage() {
                 {approveTxHash && (
                   <a href={`${EXPLORER_URL}/tx/${approveTxHash}`} target="_blank" rel="noreferrer"
                     style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '12px', marginTop: '10px', textDecoration: 'none' }}>
-                    <ExternalLink size={12} /> View approve tx
+                    <MdOpenInNew size={12} /> View approve tx
                   </a>
                 )}
               </>

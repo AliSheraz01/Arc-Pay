@@ -17,23 +17,22 @@ import Link from 'next/link'
 import { formatUnits, parseUnits } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { 
-  Send as SendIcon, 
-  Download as ReceiveIcon, 
-  Eye, 
-  EyeOff, 
-  User, 
-  QrCode, 
-  Link2, 
-  Coins, 
-  Activity, 
-  BookOpen, 
-  ExternalLink,
-  ChevronRight,
-  CheckCircle,
-  Clock,
-  ArrowUpRight,
-  ArrowDownLeft
-} from 'lucide-react'
+  MdSend, 
+  MdCallReceived, 
+  MdVisibility, 
+  MdVisibilityOff, 
+  MdPerson, 
+  MdQrCode, 
+  MdLink, 
+  MdMonetizationOn, 
+  MdTimeline, 
+  MdMenuBook, 
+  MdOpenInNew,
+  MdChevronRight,
+  MdCheckCircle,
+  MdAccessTime,
+  MdCallMade
+} from 'react-icons/md'
 
 interface Transaction {
   id: string
@@ -263,7 +262,7 @@ export default function DashboardPage() {
                       onClick={() => setHideBalance(!hideBalance)}
                       style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
                     >
-                      {hideBalance ? <EyeOff size={15} /> : <Eye size={15} />}
+                      {hideBalance ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                     </button>
                   </div>
 
@@ -290,7 +289,7 @@ export default function DashboardPage() {
                         onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
                         onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
                       >
-                        <SendIcon size={14} /> Send
+                        <MdSend size={18} /> Send
                       </button>
                     </Link>
                     <Link href="/receive?tab=qr" style={{ textDecoration: 'none' }}>
@@ -304,7 +303,7 @@ export default function DashboardPage() {
                         onMouseOver={e => e.currentTarget.style.background = 'var(--surface-raised)'}
                         onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                       >
-                        <QrCode size={14} /> Receive
+                        <MdQrCode size={18} /> Receive
                       </button>
                     </Link>
                   </div>
@@ -352,7 +351,7 @@ export default function DashboardPage() {
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <User size={18} style={{ color: 'var(--accent)' }} />
+                  <MdPerson size={20} style={{ color: 'var(--accent)' }} />
                   <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>My Profile</h3>
                 </div>
 
@@ -436,7 +435,7 @@ export default function DashboardPage() {
                           borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: 700 }}>
-                            <Clock size={14} className="shimmer-rotate" />
+                            <MdAccessTime size={18} className="shimmer-rotate" />
                             <span>
                               {waitingApprove ? 'Waiting for USDC Approval...' : waitingReg ? 'Registering username on Arc...' : 'Successfully Registered!'}
                             </span>
@@ -548,7 +547,7 @@ export default function DashboardPage() {
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               color: isSent ? 'var(--accent)' : 'var(--green)',
                             }}>
-                              {isSent ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
+                              {isSent ? <MdCallMade size={20} /> : <MdCallReceived size={20} />}
                             </div>
 
                             {/* Details */}
@@ -606,10 +605,10 @@ export default function DashboardPage() {
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <QuickActionRow href="/send" icon={SendIcon} label="Send to @username" />
-                  <QuickActionRow href="/receive?tab=qr" icon={QrCode} label="Scan QR Code" />
-                  <QuickActionRow href="/receive?tab=request" icon={Link2} label="Create Payment Link" />
-                  <QuickActionRow href="/receive?tab=request" icon={Coins} label="Request Payment" />
+                  <QuickActionRow href="/send" icon={MdSend} label="Send to @username" />
+                  <QuickActionRow href="/receive?tab=qr" icon={MdQrCode} label="Scan QR Code" />
+                  <QuickActionRow href="/receive?tab=request" icon={MdLink} label="Create Payment Link" />
+                  <QuickActionRow href="/receive?tab=request" icon={MdMonetizationOn} label="Request Payment" />
                 </div>
               </div>
 
@@ -677,7 +676,7 @@ function QuickActionRow({ href, icon: Icon, label }: { href: string; icon: any; 
           </div>
           <span style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 800 }}>{label}</span>
         </div>
-        <ChevronRight size={16} style={{ color: 'var(--text-secondary)' }} />
+        <MdChevronRight size={20} style={{ color: 'var(--text-secondary)' }} />
       </div>
     </Link>
   )
@@ -708,7 +707,7 @@ function HelpRow({ href, label }: { href: string; label: string }) {
       onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
     >
       <span>{label}</span>
-      <ExternalLink size={14} style={{ color: 'var(--text-muted)' }} />
+      <MdOpenInNew size={18} style={{ color: 'var(--text-muted)' }} />
     </a>
   )
 }

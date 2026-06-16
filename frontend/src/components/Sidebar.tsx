@@ -4,16 +4,16 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { 
-  Home, 
-  Send, 
-  Download, 
-  History, 
-  Settings, 
-  Sun, 
-  Moon,
-  User,
-  Link2,
-} from 'lucide-react'
+  MdHome, 
+  MdSend, 
+  MdCallReceived, 
+  MdHistory, 
+  MdSettings, 
+  MdLightMode, 
+  MdDarkMode,
+  MdPerson,
+  MdLink,
+} from 'react-icons/md'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -38,13 +38,13 @@ export function Sidebar() {
   }
 
   const navItems = [
-    { href: '/', label: 'Home', icon: Home },
-    { href: '/send', label: 'Send', icon: Send },
-    { href: '/receive', label: 'Receive', icon: Download },
-    { href: '/history', label: 'Transactions', icon: History },
-    { href: '/profile', label: 'Profile', icon: User },
-    { href: '/receive?tab=request', label: 'Payment Links', icon: Link2 },
-    { href: '/settings', label: 'Settings', icon: Settings },
+    { href: '/', label: 'Home', icon: MdHome },
+    { href: '/send', label: 'Send', icon: MdSend },
+    { href: '/receive', label: 'Receive', icon: MdCallReceived },
+    { href: '/history', label: 'Transactions', icon: MdHistory },
+    { href: '/profile', label: 'Profile', icon: MdPerson },
+    { href: '/receive?tab=request', label: 'Payment Links', icon: MdLink },
+    { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
 
   return (
@@ -204,7 +204,7 @@ export function Sidebar() {
                 transition: 'all 0.2s',
               }}
             >
-              <Sun size={14} style={{ color: '#f5c542' }} />
+              <MdLightMode size={16} style={{ color: '#f5c542' }} />
               <span>Light</span>
             </button>
             <button
@@ -227,7 +227,7 @@ export function Sidebar() {
                 transition: 'all 0.2s',
               }}
             >
-              <Moon size={14} style={{ color: '#7c3aed' }} />
+              <MdDarkMode size={16} style={{ color: '#7c3aed' }} />
               <span>Dark</span>
             </button>
           </div>

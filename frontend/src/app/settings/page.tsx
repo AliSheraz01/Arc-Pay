@@ -8,7 +8,7 @@ import { REGISTRY_ADDRESS, USDC_ADDRESS, EXPLORER_URL } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
 import Link from 'next/link'
 import { formatUnits } from 'viem'
-import { User, Shield, CreditCard, Clock, CheckCircle } from 'lucide-react'
+import { MdPerson, MdSecurity, MdCreditCard, MdAccessTime, MdCheckCircle } from 'react-icons/md'
 
 export default function SettingsPage() {
   const { address, isConnected } = useAccount()
@@ -149,7 +149,7 @@ export default function SettingsPage() {
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-              <User size={18} style={{ color: 'var(--accent)' }} />
+              <MdPerson size={20} style={{ color: 'var(--accent)' }} />
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>Username</h2>
             </div>
 
@@ -222,7 +222,7 @@ export default function SettingsPage() {
                     borderRadius: '12px', padding: '14px', marginBottom: '16px',
                   }}>
                     <p style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Clock size={14} className="shimmer-rotate" />
+                      <MdAccessTime size={14} className="shimmer-rotate" />
                       <span>
                         {waitingApprove ? 'Waiting for USDC Approval...' : waitingReg ? 'Confirming on-chain...' : '✓ Username registered!'}
                       </span>
@@ -282,7 +282,7 @@ export default function SettingsPage() {
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-              <Shield size={18} style={{ color: 'var(--accent)' }} />
+              <MdCheckCircle size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
               <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>Wallet & Chain Info</h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

@@ -9,7 +9,7 @@ import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_U
 import { USDC_ABI, ROUTER_ABI, REGISTRY_ABI } from '@/lib/abi'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, CheckCircle, Search, AlertCircle } from 'lucide-react'
+import { MdArrowBack, MdAccessTime, MdCheckCircle, MdSearch, MdErrorOutline } from 'react-icons/md'
 
 type Step = 'form' | 'confirm' | 'success'
 
@@ -159,7 +159,7 @@ function SendForm() {
     <PageLayout>
       <main style={{ maxWidth: '480px', margin: '0 auto' }}>
         <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontWeight: 600 }}>
-          <ArrowLeft size={16} /> Back to Dashboard
+          <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
         <NetworkGuard>
@@ -198,7 +198,7 @@ function SendForm() {
                     onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   />
                 </div>
-                {resolving && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><Search size={12} className="shimmer-rotate" /> Resolving username...</p>}
+                {resolving && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch size={12} className="shimmer-rotate" /> Resolving username...</p>}
                 {resolvedAddress && !resolveError && (
                   <p style={{ color: 'var(--green)', fontSize: '12px', marginTop: '6px', fontFamily: 'monospace', fontWeight: 600 }}>
                     ✓ Resolved: {resolvedAddress.slice(0, 10)}…{resolvedAddress.slice(-8)}
@@ -206,7 +206,7 @@ function SendForm() {
                 )}
                 {resolveError && (
                   <p style={{ color: 'var(--red)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                    <AlertCircle size={12} /> {resolveError}
+                    <MdErrorOutline size={12} /> {resolveError}
                   </p>
                 )}
               </div>
@@ -319,7 +319,7 @@ function SendForm() {
               {phase === 'approving' && (
                 <div style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-accent)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
                   <p style={{ color: 'var(--accent-bright)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <Clock size={14} className="shimmer-rotate" />
+                    <MdAccessTime size={14} className="shimmer-rotate" />
                     <span>{waitingApprove ? 'Waiting for USDC spend limit approval...' : 'Approving USDC Router spend limit...'}</span>
                   </p>
                 </div>
@@ -328,7 +328,7 @@ function SendForm() {
               {phase === 'sending' && (
                 <div style={{ background: 'rgba(0, 212, 168, 0.08)', border: '1px solid rgba(0, 212, 168, 0.2)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
                   <p style={{ color: 'var(--green)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <Clock size={14} className="shimmer-rotate" />
+                    <MdAccessTime size={14} className="shimmer-rotate" />
                     <span>{waitingSend ? 'Confirming payment on Arc...' : 'Submitting payment transaction...'}</span>
                   </p>
                 </div>

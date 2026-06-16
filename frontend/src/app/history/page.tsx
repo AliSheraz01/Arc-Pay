@@ -6,7 +6,7 @@ import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { BACKEND_URL, EXPLORER_URL } from '@/lib/constants'
 import Link from 'next/link'
-import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Calendar } from 'lucide-react'
+import { MdArrowBack, MdCallMade, MdCallReceived, MdCalendarToday } from 'react-icons/md'
 
 interface Transaction {
   id: string
@@ -48,7 +48,7 @@ export default function HistoryPage() {
     <PageLayout>
       <main style={{ maxWidth: '560px', margin: '0 auto' }}>
         <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontWeight: 600 }}>
-          <ArrowLeft size={16} /> Back to Dashboard
+          <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
         <NetworkGuard>
@@ -110,7 +110,7 @@ export default function HistoryPage() {
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           color: isSent ? 'var(--red)' : 'var(--green)',
                         }}>
-                          {isSent ? <ArrowUpRight size={20} /> : <ArrowDownLeft size={20} />}
+                          {isSent ? <MdCallMade size={18} /> : <MdCallReceived size={18} />}
                         </div>
 
                         {/* Details */}
@@ -138,7 +138,7 @@ export default function HistoryPage() {
                           </div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600 }}>USDC</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                            <Calendar size={10} />
+                            <MdCalendarToday size={16} />
                             <span>{date}</span>
                           </div>
                         </div>

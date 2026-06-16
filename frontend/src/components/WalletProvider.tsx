@@ -61,8 +61,8 @@ const connectors = connectorsForWallets(
       : []),
   ],
   {
-    appName: 'ArcPay',
-    projectId: PROJECT_ID || 'arcpay_demo',
+    appName: 'EasyZpay',
+    projectId: PROJECT_ID || 'easyzpay_demo',
   }
 )
 
@@ -114,9 +114,9 @@ class WalletErrorBoundary extends React.Component<
       error.message.includes('WalletConnect') ||
       error.message.includes('session')
     ) {
-      console.warn('[ArcPay] Wallet connector error (non-fatal):', error.message)
+      console.warn('[EasyZpay] Wallet connector error (non-fatal):', error.message)
     } else {
-      console.error('[ArcPay] Unexpected error:', error)
+      console.error('[EasyZpay] Unexpected error:', error)
     }
   }
 

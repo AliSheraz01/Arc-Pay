@@ -60,7 +60,7 @@ export function Header() {
             color: 'var(--accent)',
             letterSpacing: '-0.02em',
           }}>
-            Arc Pay
+            EasyZpay
           </span>
         </Link>
       </div>

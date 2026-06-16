@@ -72,7 +72,7 @@ export function Sidebar() {
               color: 'var(--accent)',
               letterSpacing: '-0.04em',
             }}>
-              Arc Pay
+              EasyZpay
             </span>
           </Link>
 
@@ -230,6 +230,42 @@ export function Sidebar() {
               <Moon size={14} style={{ color: '#7c3aed' }} />
               <span>Dark</span>
             </button>
+          </div>
+
+          <div style={{ 
+            marginTop: '16px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            padding: '4px 0'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <img 
+                src="https://unavatar.io/twitter/alisheraz0ev" 
+                alt="@alisheraz0ev avatar"
+                style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                Built By @alisheraz0ev
+              </span>
+            </div>
+            <a 
+              href="https://x.com/alisheraz0ev" 
+              target="_blank" 
+              rel="noreferrer"
+              style={{
+                background: '#0f172a',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '6px 12px',
+                borderRadius: '16px',
+                textDecoration: 'none',
+                letterSpacing: '0.05em'
+              }}
+            >
+              FOLLOW
+            </a>
           </div>
         </div>
       </aside>

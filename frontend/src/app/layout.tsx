@@ -10,7 +10,7 @@ const outfit = Outfit({
 })
 
 export const metadata: Metadata = {
-  title: 'ArcPay — Instant USDC Payments on Arc Network',
+  title: 'EasyZpay — Instant USDC Payments on Arc Network',
   description: 'Send and receive USDC instantly on Arc Network. The fastest, cheapest peer-to-peer stablecoin payment app.',
 }
 

@@ -18,6 +18,8 @@ export type { IERC165 } from "./@openzeppelin/contracts/utils/introspection/IERC
 export { IERC165__factory } from "./factories/@openzeppelin/contracts/utils/introspection/IERC165__factory";
 export type { Pausable } from "./@openzeppelin/contracts/utils/Pausable";
 export { Pausable__factory } from "./factories/@openzeppelin/contracts/utils/Pausable__factory";
+export type { ArcPayBulkRouter } from "./contracts/ArcPayBulkRouter";
+export { ArcPayBulkRouter__factory } from "./factories/contracts/ArcPayBulkRouter__factory";
 export type { ArcPayRouter } from "./contracts/ArcPayRouter";
 export { ArcPayRouter__factory } from "./factories/contracts/ArcPayRouter__factory";
 export type { ArcPayUsernameRegistry } from "./contracts/ArcPayUsernameRegistry";

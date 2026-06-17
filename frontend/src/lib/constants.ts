@@ -32,6 +32,8 @@ export const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ?? '0x
 
 export const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_ROUTER_ADDRESS ?? '0x71157874BBD90389A429714815454C64FE061F1c') as `0x${string}`
 
+export const BULK_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_BULK_ROUTER_ADDRESS ?? '0xB1a346132F5eC1Ad7CC8A84DE33A2763d13110B4') as `0x${string}`
+
 export const EXPLORER_URL = 'https://testnet.arcscan.app'
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'

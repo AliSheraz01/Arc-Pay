@@ -95,3 +95,28 @@ export const ROUTER_ABI = [
     ],
   },
 ] as const
+
+// ABI for ArcPayBulkRouter
+export const BULK_ROUTER_ABI = [
+  {
+    name: 'sendBulkPayment',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_to', type: 'address[]' },
+      { name: '_amounts', type: 'uint256[]' },
+      { name: '_memos', type: 'string[]' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'PaymentSent',
+    type: 'event',
+    inputs: [
+      { name: 'from', type: 'address', indexed: true },
+      { name: 'to', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'memo', type: 'string', indexed: false },
+    ],
+  },
+] as const

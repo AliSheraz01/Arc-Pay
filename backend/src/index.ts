@@ -188,8 +188,8 @@ app.get('/api/requests/:address', async (req, res) => {
 const START_BLOCK = 44800000n;
 const RPC_URL = process.env.RPC_URL || 'https://rpc.testnet.arc.network';
 const REGISTRY_ADDRESS = (process.env.REGISTRY_ADDRESS || '0x08EAda9790495804329E0234464fd86CA4b35ff2') as `0x${string}`;
-const ROUTER_ADDRESS = (process.env.ROUTER_ADDRESS || '0x1bbdb36AD54Fb19781669Ce096074E6a14a73521') as `0x${string}`;
-
+const ROUTER_ADDRESS = (process.env.ROUTER_ADDRESS || '0x71157874BBD90389A429714815454C64FE061F1c') as `0x${string}`;
+const BULK_ROUTER_ADDRESS = (process.env.BULK_ROUTER_ADDRESS || '0xB1a346132F5eC1Ad7CC8A84DE33A2763d13110B4') as `0x${string}`;
 const REGISTRY_ABI = [
   {
     name: 'registerUsername',
@@ -292,7 +292,7 @@ async function indexUsernames(fromBlock: bigint, toBlock: bigint) {
 async function indexPayments(fromBlock: bigint, toBlock: bigint) {
   try {
     const logs = await viemClient.getLogs({
-      address: ROUTER_ADDRESS,
+      address: [ROUTER_ADDRESS, BULK_ROUTER_ADDRESS],
       event: {
         type: 'event',
         name: 'PaymentSent',

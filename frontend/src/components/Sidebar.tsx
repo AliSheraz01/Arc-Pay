@@ -13,6 +13,7 @@ import {
   MdDarkMode,
   MdPerson,
   MdLink,
+  MdAutoAwesome,
 } from 'react-icons/md'
 
 export function Sidebar() {
@@ -44,6 +45,7 @@ export function Sidebar() {
     { href: '/history', label: 'Transactions', icon: MdHistory },
     { href: '/profile', label: 'Profile', icon: MdPerson },
     { href: '/receive?tab=request', label: 'Payment Links', icon: MdLink },
+    { href: '/agent', label: 'AI Pay', icon: MdAutoAwesome },
     { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
 

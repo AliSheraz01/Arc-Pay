@@ -43,15 +43,7 @@ export default function AgentPage() {
     args: myAddress ? [myAddress, BULK_ROUTER_ADDRESS] : undefined,
   })
 
-  const { isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
   const { isSuccess: sendSuccess } = useWaitForTransactionReceipt({ hash: sendTxHash })
-
-  useEffect(() => {
-    if (approveSuccess) {
-      refetchAllowance()
-      executeBulkSend()
-    }
-  }, [approveSuccess])
 
   useEffect(() => {
     if (sendSuccess) {
@@ -138,13 +130,11 @@ export default function AgentPage() {
       return
     }
 
-    const totalUnits = parseUnits(totalAmount, 6)
-    
     try {
-      if (allowance !== undefined && (allowance as bigint) >= totalUnits) {
-        // Already approved, jump to send
-        await executeBulkSend()
-      } else {
+      const amounts = recipients.map(r => parseUnits(r.amount, 6))
+      const totalUnits = amounts.reduce((acc, val) => acc + val, 0n)
+      
+      if (allowance === undefined || (allowance as bigint) < totalUnits) {
         // Need to approve
         setState('approving')
         const hash = await writeContractAsync({
@@ -154,18 +144,25 @@ export default function AgentPage() {
           args: [BULK_ROUTER_ADDRESS, totalUnits],
         })
         setApproveTxHash(hash)
+        
+        // Wait briefly for approval to be mined (matching send page pattern)
+        await new Promise(r => setTimeout(r, 3000))
       }
+
+      // Execute send
+      await executeBulkSend(amounts)
+      
     } catch (e: any) {
       setError(e.message || "Transaction failed")
       setState('breakdown')
     }
   }
 
-  const executeBulkSend = async () => {
+  const executeBulkSend = async (precomputedAmounts?: readonly bigint[]) => {
     setState('sending')
     try {
       const addresses = recipients.map(r => r.address as `0x${string}`)
-      const amounts = recipients.map(r => parseUnits(r.amount, 6))
+      const amounts = precomputedAmounts || recipients.map(r => parseUnits(r.amount, 6))
       const memos = recipients.map(() => 'Sent via AI Pay Agent')
 
       const hash = await writeContractAsync({

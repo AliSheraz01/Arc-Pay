@@ -551,9 +551,9 @@ function LookupForm() {
           disabled={!isCorrectNetwork}
           style={{
             flex: 1,
-            background: '#f9fafb', border: '1px solid #e5e7eb',
+            background: 'var(--surface-raised)', border: '1px solid var(--border)',
             borderRadius: '12px', padding: '12px 14px',
-            color: '#111827', fontSize: '14px', fontWeight: 600,
+            color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600,
             outline: 'none', fontFamily: 'monospace',
           }}
         />
@@ -561,10 +561,10 @@ function LookupForm() {
           onClick={handleLookup}
           disabled={!lookup.trim() || looking || !isCorrectNetwork}
           style={{
-            background: lookup.trim() && !looking && isCorrectNetwork ? '#111827' : '#f3f4f6',
+            background: lookup.trim() && !looking && isCorrectNetwork ? 'var(--text-primary)' : 'var(--surface-raised)',
             border: 'none',
             borderRadius: '12px', padding: '12px 20px',
-            color: lookup.trim() && !looking && isCorrectNetwork ? 'white' : '#9ca3af',
+            color: lookup.trim() && !looking && isCorrectNetwork ? 'var(--surface)' : 'var(--text-muted)',
             fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
             transition: 'all 0.2s',
           }}

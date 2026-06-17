@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
@@ -26,8 +26,15 @@ import {
   MdAlternateEmail,
   MdTag,
   MdArrowForward,
+  MdTimeline,
+  MdTrendingUp,
+  MdDateRange,
+  MdFlashOn,
+  MdAccountBalanceWallet,
+  MdSwapHoriz,
 } from 'react-icons/md'
 import { useQuery } from '@tanstack/react-query'
+import styles from './ProfileAnalyzer.module.css'
 
 const REGISTRATION_FEE = parseUnits('1', 6) // 1 USDC
 
@@ -85,12 +92,10 @@ export default function ProfilePage() {
     query: { enabled: !!regTxHash },
   })
 
-  // Reset approvedInSession if username input changes
   useEffect(() => {
     setApprovedInSession(false)
   }, [usernameInput])
 
-  // When approve succeeds, refetch allowance and reset step to idle
   useEffect(() => {
     if (approveSuccess) {
       refetchAllowance()
@@ -99,7 +104,6 @@ export default function ProfilePage() {
     }
   }, [approveSuccess, refetchAllowance])
 
-  // When register receipt lands, mark done
   useEffect(() => {
     if (regReceipt && step === 'registering') {
       setStep('done')
@@ -107,37 +111,121 @@ export default function ProfilePage() {
     }
   }, [regReceipt, step, refetchUsername])
 
-  // Transaction history for stats
-  const { data: txData } = useQuery({
-    queryKey: ['txHistory', address],
+  // Transaction history for analytics
+  const { data: rawTxData } = useQuery({
+    queryKey: ['txHistoryRaw', address],
     queryFn: async () => {
-      if (!address) return { sent: 0, received: 0 }
-      const res = await fetch(`${BACKEND_URL}/api/transactions?address=${address}&limit=100`)
-      if (!res.ok) return { sent: 0, received: 0 }
-      const data = await res.json()
-      const txs: { fromAddress: string; toAddress: string; amount: string }[] = data.transactions ?? []
-      const sent = txs.filter(t => t.fromAddress.toLowerCase() === address.toLowerCase())
-      const received = txs.filter(t => t.toAddress.toLowerCase() === address.toLowerCase())
-      const totalSent = sent.reduce((s, t) => s + parseFloat(t.amount), 0)
-      const totalReceived = received.reduce((s, t) => s + parseFloat(t.amount), 0)
-      return { sent: sent.length, received: received.length, totalSent, totalReceived }
+      if (!address) return []
+      const res = await fetch(`${BACKEND_URL}/api/transactions/${address}`)
+      if (!res.ok) return []
+      return await res.json()
     },
     enabled: !!address,
     refetchInterval: 15000,
   })
 
+  // Analytics Calculations
+  const analytics = useMemo(() => {
+    const txs = Array.isArray(rawTxData) ? rawTxData : []
+    
+    // Base stats
+    const sent = txs.filter((t: any) => t.fromAddress.toLowerCase() === address?.toLowerCase())
+    const received = txs.filter((t: any) => t.toAddress.toLowerCase() === address?.toLowerCase())
+    
+    let firstDate: Date | null = null
+    let lastDate: Date | null = null
+    
+    if (txs.length > 0) {
+      // Sort ascending to find first/last
+      const sorted = [...txs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      firstDate = new Date(sorted[0].timestamp)
+      lastDate = new Date(sorted[sorted.length - 1].timestamp)
+    }
+
+    // Heatmap data (last 16 weeks)
+    const weeks = 16
+    const days = weeks * 7
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const counts: Record<string, number> = {}
+    txs.forEach((tx: any) => {
+      const d = new Date(tx.timestamp)
+      d.setHours(0, 0, 0, 0)
+      counts[d.toISOString()] = (counts[d.toISOString()] || 0) + 1
+    })
+
+    const heatmapArray = []
+    let activeDaysCount = 0
+    let currentStreak = 0
+    let maxStreak = 0
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = d.toISOString()
+      const count = counts[key] || 0
+      
+      let level = 0
+      if (count > 0) {
+        level = 1
+        if (count > 2) level = 2
+        if (count > 5) level = 3
+        if (count > 10) level = 4
+        if (count > 20) level = 5
+        
+        activeDaysCount++
+        currentStreak++
+        if (currentStreak > maxStreak) maxStreak = currentStreak
+      } else {
+        currentStreak = 0
+      }
+      
+      heatmapArray.push({ date: d, count, level })
+    }
+
+    const weeksData = []
+    for (let i = 0; i < heatmapArray.length; i += 7) {
+      weeksData.push(heatmapArray.slice(i, i + 7))
+    }
+
+    // Calculate Wallet Age
+    let walletAge = 'New Wallet'
+    if (firstDate) {
+      const diffTime = Math.abs(today.getTime() - firstDate.getTime())
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      if (diffDays < 30) walletAge = `${diffDays} Days`
+      else walletAge = `${Math.floor(diffDays / 30)} Months`
+    }
+
+    // Calculate Reputation Score (0 - 99)
+    // Formula: Baseline + active days bonus + tx volume bonus + verification bonus
+    let repScore = 15 // Base score
+    if (txs.length > 0) repScore += 10
+    repScore += Math.min(30, activeDaysCount * 2)
+    repScore += Math.min(20, txs.length)
+    if (myUsername && (myUsername as string).length > 0) repScore += 24 // Verified bonus
+    
+    repScore = Math.min(99, Math.floor(repScore))
+
+    return {
+      totalTxs: txs.length,
+      sentCount: sent.length,
+      receivedCount: received.length,
+      firstDate,
+      lastDate,
+      walletAge,
+      activeDays: activeDaysCount,
+      longestStreak: maxStreak,
+      heatmap: weeksData,
+      reputationScore: repScore
+    }
+  }, [rawTxData, address, myUsername])
+
   const formattedBalance = usdcBalance !== undefined ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toFixed(2) : '—'
   const hasEnoughBalance = usdcBalance !== undefined && (usdcBalance as bigint) >= REGISTRATION_FEE
   const alreadyApproved = (allowance !== undefined && (allowance as bigint) >= REGISTRATION_FEE) || approvedInSession
   const alreadyRegistered = !!(myUsername && (myUsername as string).length > 0)
-
-  const validateUsername = (u: string) => {
-    if (!u) return 'Username is required'
-    if (u.length < 3) return 'At least 3 characters'
-    if (u.length > 32) return 'Max 32 characters'
-    if (!/^[a-zA-Z0-9_]+$/.test(u)) return 'Only letters, numbers, underscores'
-    return ''
-  }
 
   const handleRegister = async () => {
     setStep('registering')
@@ -158,8 +246,8 @@ export default function ProfilePage() {
   }
 
   const handleSubmit = async () => {
-    const validationError = validateUsername(usernameInput)
-    if (validationError) { setError(validationError); return }
+    if (!usernameInput) { setError('Username is required'); return }
+    if (usernameInput.length < 3) { setError('At least 3 characters'); return }
     setError('')
 
     if (!hasEnoughBalance) {
@@ -172,7 +260,6 @@ export default function ProfilePage() {
       return
     }
 
-    // Need to approve first
     setStep('approving')
     try {
       const hash = await writeContractAsync({
@@ -198,388 +285,219 @@ export default function ProfilePage() {
   }
 
   const shortAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`
+  const formatDate = (d: Date | null) => {
+    if (!d) return '—'
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   return (
     <PageLayout>
       <NetworkGuard>
-        <div style={{ maxWidth: '640px', margin: '0 auto', padding: '0 4px' }}>
-
-          {/* Header */}
-          <div style={{ marginBottom: '32px' }}>
-            <h1 style={{
-              fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)',
-              letterSpacing: '-0.03em', marginBottom: '8px',
-            }}>
-              Your Profile
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '15px' }}>
-              Manage your Arc identity and view account stats.
-            </p>
+        <div className={styles.container}>
+          
+          <div className={styles.header}>
+            <h1 className={styles.title}>Profile Analyzer</h1>
+            <p className={styles.subtitle}>Deep insights into your on-chain payment activity and reputation.</p>
           </div>
 
-          {/* Profile Card */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(0,212,168,0.08) 100%)',
-            border: '1px solid var(--border-accent)',
-            borderRadius: '24px',
-            padding: '28px',
-            marginBottom: '24px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            {/* Decorative blur */}
-            <div style={{
-              position: 'absolute', top: '-40px', right: '-40px',
-              width: '160px', height: '160px',
-              background: 'radial-gradient(circle, #7c3aed40 0%, transparent 70%)',
-              borderRadius: '50%', pointerEvents: 'none',
-            }} />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-              {/* Avatar */}
-              <div style={{
-                width: '72px', height: '72px',
-                background: 'linear-gradient(135deg, #7c3aed, #00d4a8)',
-                borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '28px',
-                flexShrink: 0,
-                boxShadow: '0 0 24px #7c3aed50',
-              }}>
-                {alreadyRegistered ? (myUsername as string)[0].toUpperCase() : '👤'}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {alreadyRegistered ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)' }}>
-                        @{myUsername as string}
-                      </span>
-                      <MdVerifiedUser size={18} style={{ color: '#00d4a8' }} />
-                    </div>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verified Arc Identity</p>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      No Username Yet
-                    </span>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
-                      Register below to claim your Arc identity
+          {/* Profile Overview */}
+          <div className={styles.profileGrid}>
+            <div className={styles.card}>
+              <div className={styles.avatarArea}>
+                <div className={styles.avatar}>
+                  {alreadyRegistered ? (myUsername as string)[0].toUpperCase() : '👤'}
+                  <div className={styles.badge} title="Arc Testnet">
+                    <MdVerifiedUser size={14} />
+                  </div>
+                </div>
+                <div className={styles.profileInfo}>
+                  <h2>
+                    {alreadyRegistered ? `@${myUsername}` : 'Unregistered Wallet'}
+                    {alreadyRegistered && <MdVerifiedUser size={20} color="#00d4a8" />}
+                  </h2>
+                  {address && (
+                    <p>
+                      <MdTag size={14} /> {shortAddr(address)}
+                      <button onClick={copyAddress} style={{ background:'none', border:'none', cursor:'pointer', color: copied ? '#00d4a8' : '#6b7280' }}>
+                        <MdContentCopy size={14} />
+                      </button>
                     </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Wallet Address */}
-            {address && (
-              <div style={{
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: '14px', padding: '14px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                gap: '12px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                  <MdTag size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                  <span style={{
-                    fontFamily: 'monospace', fontSize: '14px',
-                    color: 'var(--text-primary)', fontWeight: 600,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {shortAddr(address)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                  <button
-                    onClick={copyAddress}
-                    title="Copy address"
-                    style={{
-                      background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                      borderRadius: '8px', padding: '6px 10px', cursor: 'pointer',
-                      color: copied ? '#00d4a8' : 'var(--text-secondary)',
-                      fontSize: '12px', fontWeight: 600,
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <MdContentCopy size={13} />
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
-                  <a
-                    href={`${EXPLORER_URL}/address/${address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                      borderRadius: '8px', padding: '6px 10px', cursor: 'pointer',
-                      color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600,
-                      display: 'flex', alignItems: 'center', gap: '4px',
-                      textDecoration: 'none', transition: 'all 0.2s',
-                    }}
-                  >
-                    <MdOpenInNew size={13} />
-                    Explorer
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Stats Row */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px', marginBottom: '24px',
-          }}>
-            {[
-              { label: 'USDC Balance', value: `$${formattedBalance}`, icon: <MdMonetizationOn size={18} style={{ color: '#00d4a8' }} /> },
-              { label: 'Sent', value: txData ? `${txData.sent} txs` : '—', icon: <MdArrowForward size={18} style={{ color: '#7c3aed' }} /> },
-              { label: 'Received', value: txData ? `${txData.received} txs` : '—', icon: <MdArrowForward size={18} style={{ color: '#f59e0b', transform: 'rotate(180deg)' }} /> },
-            ].map(stat => (
-              <div key={stat.label} style={{
-                background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                borderRadius: '16px', padding: '16px', textAlign: 'center',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                  {stat.icon}
-                </div>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {stat.value}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  {stat.label}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Username Registration Section */}
-          <div style={{
-            background: 'var(--surface-raised)', border: '1px solid var(--border)',
-            borderRadius: '24px', padding: '28px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-              <div style={{
-                width: '40px', height: '40px',
-                background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
-                borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <MdAlternateEmail size={20} style={{ color: 'var(--accent)' }} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2px' }}>
-                  Arc Username
-                </h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  One-time registration · 1 USDC fee
-                </p>
-              </div>
-            </div>
-
-            {alreadyRegistered ? (
-              /* Already registered */
-              <div style={{
-                background: 'rgba(0,212,168,0.08)', border: '1px solid rgba(0,212,168,0.3)',
-                borderRadius: '16px', padding: '20px',
-                display: 'flex', alignItems: 'center', gap: '14px',
-              }}>
-                <MdCheckCircle size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
-                <div>
-                  <p style={{ color: '#00d4a8', fontWeight: 800, fontSize: '16px' }}>
-                    @{myUsername as string}
-                  </p>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
-                    Your username is registered on-chain. Others can pay you using @{myUsername as string}.
-                  </p>
-                </div>
-              </div>
-            ) : step === 'done' ? (
-              /* Just registered */
-              <div style={{
-                background: 'rgba(0,212,168,0.08)', border: '1px solid rgba(0,212,168,0.3)',
-                borderRadius: '16px', padding: '20px',
-                display: 'flex', alignItems: 'center', gap: '14px',
-              }}>
-                <MdAutoAwesome size={28} style={{ color: '#00d4a8', flexShrink: 0 }} />
-                <div>
-                  <p style={{ color: '#00d4a8', fontWeight: 800, fontSize: '16px' }}>
-                    🎉 @{usernameInput.toLowerCase().trim()} registered!
-                  </p>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
-                    Your Arc identity is live. Share it with anyone to receive payments.
-                  </p>
-                  {regTxHash && (
-                    <a
-                      href={`${EXPLORER_URL}/tx/${regTxHash}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: 'var(--accent)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px', textDecoration: 'none' }}
-                    >
-                      View transaction <MdOpenInNew size={12} />
-                    </a>
                   )}
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}><strong>{analytics.walletAge}</strong> Age</span>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}><strong>{analytics.reputationScore > 50 ? 'High' : 'Normal'}</strong> Activity</span>
+                  </div>
                 </div>
               </div>
-            ) : (
-              /* Registration form */
-              <>
-                {/* Info banner */}
-                <div style={{
-                  background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
-                  borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
-                  display: 'flex', gap: '10px', alignItems: 'flex-start',
-                }}>
-                  <MdErrorOutline size={16} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
-                    Registering a username costs <strong style={{ color: 'var(--text-primary)' }}>1 USDC</strong> paid on-chain.
-                    You will be asked to approve USDC spending first, then confirm the registration.
-                    Your current balance: <strong style={{ color: hasEnoughBalance ? '#00d4a8' : '#ef4444' }}>${formattedBalance} USDC</strong>
-                  </p>
-                </div>
 
-                {/* Input */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    Choose your username
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{
-                      position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)',
-                      color: 'var(--accent)', fontWeight: 800, fontSize: '16px', pointerEvents: 'none',
-                    }}>@</span>
-                    <input
-                      type="text"
+              {!alreadyRegistered && (
+                <div className={styles.regBanner}>
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}>Claim your Arc Identity</h4>
+                    <p style={{ fontSize: '12px', color: '#6b7280' }}>Required 1 USDC fee to register a username.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input 
+                      type="text" 
+                      placeholder="@username" 
                       value={usernameInput}
-                      onChange={e => { setUsernameInput(e.target.value); setError('') }}
-                      placeholder="yourname"
-                      maxLength={32}
+                      onChange={e => setUsernameInput(e.target.value)}
                       disabled={step !== 'idle'}
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: 'var(--surface)', border: `1px solid ${error ? '#ef4444' : 'var(--border)'}`,
-                        borderRadius: '14px', padding: '14px 16px 14px 36px',
-                        color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600,
-                        outline: 'none', transition: 'border-color 0.2s',
-                        fontFamily: 'monospace',
-                      }}
-                      onFocus={e => { if (!error) e.target.style.borderColor = 'var(--accent)' }}
-                      onBlur={e => { if (!error) e.target.style.borderColor = 'var(--border)' }}
                     />
-                  </div>
-                  {error && (
-                    <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 600 }}>
-                      {error}
-                    </p>
-                  )}
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '6px' }}>
-                    3–32 characters · letters, numbers, underscores only · lowercase
-                  </p>
-                </div>
-
-                {/* Steps indicator */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  marginBottom: '20px', padding: '12px 16px',
-                  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{
-                      width: '22px', height: '22px', borderRadius: '50%',
-                      background: step === 'approving' ? 'var(--accent)' : step === 'registering' ? '#00d4a8' : 'var(--surface-raised)',
-                      border: '2px solid var(--border)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '11px', fontWeight: 800, color: 'white',
-                      transition: 'all 0.3s',
-                    }}>
-                      {step === 'registering' ? '✓' : '1'}
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: step === 'approving' ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                      Approve USDC
-                    </span>
-                  </div>
-                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{
-                      width: '22px', height: '22px', borderRadius: '50%',
-                      background: step === 'registering' ? 'var(--accent)' : 'var(--surface-raised)',
-                      border: '2px solid var(--border)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '11px', fontWeight: 800, color: 'white',
-                      transition: 'all 0.3s',
-                    }}>
-                      2
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: step === 'registering' ? 'var(--accent)' : 'var(--text-secondary)' }}>
-                      Register
-                    </span>
+                    <button onClick={handleSubmit} disabled={step !== 'idle' || !usernameInput}>
+                      {step === 'approving' ? 'Approving...' : step === 'registering' ? 'Registering...' : 'Register'}
+                    </button>
                   </div>
                 </div>
+              )}
+              {error && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '12px', fontWeight: 600 }}>{error}</p>}
+            </div>
 
-                {/* Submit button */}
-                <button
-                  onClick={handleSubmit}
-                  disabled={step !== 'idle' || !usernameInput}
-                  style={{
-                    width: '100%',
-                    background: step !== 'idle' || !usernameInput
-                      ? 'var(--surface-raised)'
-                      : 'linear-gradient(135deg, #7c3aed, #9f5aff)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px',
-                    padding: '16px',
-                    color: step !== 'idle' || !usernameInput ? 'var(--text-secondary)' : 'white',
-                    fontSize: '16px',
-                    fontWeight: 800,
-                    cursor: step !== 'idle' || !usernameInput ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    transition: 'all 0.2s',
-                    boxShadow: step !== 'idle' || !usernameInput ? 'none' : '0 4px 20px #7c3aed40',
-                  }}
-                >
-                  {step === 'approving' ? (
-                    <><MdAutorenew size={18} style={{ animation: 'spin 1s linear infinite' }} /> Approving USDC…</>
-                  ) : step === 'registering' ? (
-                    <><MdAutorenew size={18} style={{ animation: 'spin 1s linear infinite' }} /> Registering on-chain…</>
-                  ) : !alreadyApproved ? (
-                    <><MdPerson size={18} /> Step 1: Approve 1 USDC Fee</>
-                  ) : (
-                    <><MdPerson size={18} /> Step 2: Register @{usernameInput.replace('@', '') || 'username'} · 1 USDC</>
-                  )}
-                </button>
-
-                {/* Tx links */}
-                {approveTxHash && (
-                  <a href={`${EXPLORER_URL}/tx/${approveTxHash}`} target="_blank" rel="noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '12px', marginTop: '10px', textDecoration: 'none' }}>
-                    <MdOpenInNew size={12} /> View approve tx
-                  </a>
-                )}
-              </>
-            )}
+            <div className={styles.card} style={{ padding: 0 }}>
+              <div className={styles.reputationScore}>
+                <div className={styles.scoreValue}>{analytics.reputationScore}</div>
+                <div className={styles.scoreLabel}>Reputation Score</div>
+                <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#6b7280' }}>
+                  <MdTrendingUp size={16} color="#00d4a8" />
+                  Top {100 - analytics.reputationScore}% of wallets
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Lookup section */}
-          <div style={{
-            background: 'var(--surface-raised)', border: '1px solid var(--border)',
-            borderRadius: '24px', padding: '24px', marginTop: '20px',
-          }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              Lookup Username
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
-              Resolve any Arc username to a wallet address.
-            </p>
-            <LookupForm />
+          {/* Analytics Cards Grid */}
+          <div className={styles.analyticsGrid}>
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.purple}`}><MdSwapHoriz size={20} /></div>
+                <div className={styles.statTitle}>Total Transactions</div>
+              </div>
+              <div className={styles.statValue}>{analytics.totalTxs}</div>
+            </div>
+            
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.teal}`}><MdAccountBalanceWallet size={20} /></div>
+                <div className={styles.statTitle}>USDC Balance</div>
+              </div>
+              <div className={styles.statValue}>${formattedBalance}</div>
+            </div>
+
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.orange}`}><MdFlashOn size={20} /></div>
+                <div className={styles.statTitle}>Longest Streak</div>
+              </div>
+              <div className={styles.statValue}>{analytics.longestStreak} <span style={{ fontSize: '14px', color: '#6b7280' }}>days</span></div>
+            </div>
+
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.pink}`}><MdTimeline size={20} /></div>
+                <div className={styles.statTitle}>Active Days</div>
+              </div>
+              <div className={styles.statValue}>{analytics.activeDays}</div>
+            </div>
+
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.indigo}`}><MdDateRange size={20} /></div>
+                <div className={styles.statTitle}>First Activity</div>
+              </div>
+              <div className={styles.statValue} style={{ fontSize: '18px' }}>{formatDate(analytics.firstDate)}</div>
+            </div>
+
+            <div className={styles.statCard}>
+              <div className={styles.statHeader}>
+                <div className={`${styles.statIcon} ${styles.blue}`}><MdDateRange size={20} /></div>
+                <div className={styles.statTitle}>Last Activity</div>
+              </div>
+              <div className={styles.statValue} style={{ fontSize: '18px' }}>{formatDate(analytics.lastDate)}</div>
+            </div>
           </div>
+
+          {/* Activity Heatmap */}
+          <div className={styles.card} style={{ marginBottom: '24px' }}>
+            <h3 className={styles.sectionTitle}><MdTimeline size={24} color="#7c3aed" /> Transaction Activity Heatmap</h3>
+            <div className={styles.heatmapContainer}>
+              <div className={styles.heatmapGrid}>
+                {/* Days of week column */}
+                <div className={styles.daysColumn}>
+                  <span>Mon</span>
+                  <span>Wed</span>
+                  <span>Fri</span>
+                </div>
+                {/* Weeks */}
+                {analytics.heatmap.map((week, i) => (
+                  <div key={i} className={styles.weekColumn}>
+                    {week.map((day, j) => (
+                      <div 
+                        key={j} 
+                        className={`${styles.dayCell} ${styles['level' + day.level]}`}
+                        title={`${day.date.toDateString()}: ${day.count} transactions`}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className={styles.legend}>
+                Less
+                <div className={`${styles.dayCell} ${styles.level0}`}></div>
+                <div className={`${styles.dayCell} ${styles.level1}`}></div>
+                <div className={`${styles.dayCell} ${styles.level2}`}></div>
+                <div className={`${styles.dayCell} ${styles.level3}`}></div>
+                <div className={`${styles.dayCell} ${styles.level4}`}></div>
+                <div className={`${styles.dayCell} ${styles.level5}`}></div>
+                More
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Behavior Insights & Lookup */}
+          <div className={styles.profileGrid} style={{ marginBottom: 0 }}>
+            <div className={styles.card}>
+              <h3 className={styles.sectionTitle}><MdAutoAwesome size={24} color="#00d4a8" /> Payment Behavior Insights</h3>
+              <div className={styles.insightList}>
+                <div className={styles.insightItem}>
+                  <div className={styles.insightLabel}>
+                    <div className={`${styles.statIcon} ${styles.purple}`} style={{ width: 28, height: 28 }}><MdArrowForward size={16} /></div>
+                    Payments Sent vs Received
+                  </div>
+                  <div className={styles.insightValue}>
+                    {analytics.sentCount} / {analytics.receivedCount}
+                  </div>
+                </div>
+                <div className={styles.insightItem}>
+                  <div className={styles.insightLabel}>
+                    <div className={`${styles.statIcon} ${styles.teal}`} style={{ width: 28, height: 28 }}><MdTrendingUp size={16} /></div>
+                    Average Transaction Frequency
+                  </div>
+                  <div className={styles.insightValue}>
+                    {analytics.totalTxs > 0 ? (analytics.totalTxs / Math.max(1, analytics.activeDays)).toFixed(1) : 0} <span style={{ fontSize: '12px', fontWeight: 500, color: '#6b7280' }}>/ active day</span>
+                  </div>
+                </div>
+                <div className={styles.insightItem}>
+                  <div className={styles.insightLabel}>
+                    <div className={`${styles.statIcon} ${styles.orange}`} style={{ width: 28, height: 28 }}><MdFlashOn size={16} /></div>
+                    Payment Consistency
+                  </div>
+                  <div className={styles.insightValue}>
+                    {analytics.activeDays > 10 ? 'High' : analytics.activeDays > 3 ? 'Medium' : 'Low'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.card}>
+              <h3 className={styles.sectionTitle}><MdAlternateEmail size={24} color="#3b82f6" /> Arc Directory</h3>
+              <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+                Lookup any Arc username to resolve its wallet address securely on-chain.
+              </p>
+              <LookupForm />
+            </div>
+          </div>
+
         </div>
-
-        <style>{`
-          @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        `}</style>
       </NetworkGuard>
     </PageLayout>
   )
@@ -597,7 +515,7 @@ function LookupForm() {
     address: REGISTRY_ADDRESS,
     abi: REGISTRY_ABI,
     functionName: 'resolveUsername',
-    args: [lookup.toLowerCase().trim()],
+    args: [lookup.toLowerCase().trim().replace('@', '')],
     query: { enabled: false },
   })
 
@@ -624,37 +542,29 @@ function LookupForm() {
   return (
     <div>
       <div style={{ display: 'flex', gap: '8px' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <span style={{
-            position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)',
-            color: 'var(--accent)', fontWeight: 800, fontSize: '15px', pointerEvents: 'none',
-          }}>@</span>
-          <input
-            type="text"
-            value={lookup}
-            onChange={e => { setLookup(e.target.value); setLookupError(''); setResolved(null) }}
-            onKeyDown={e => e.key === 'Enter' && handleLookup()}
-            placeholder="username"
-            disabled={!isCorrectNetwork}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: '12px', padding: '12px 14px 12px 32px',
-              color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600,
-              outline: 'none', fontFamily: 'monospace',
-            }}
-          />
-        </div>
+        <input
+          type="text"
+          value={lookup}
+          onChange={e => { setLookup(e.target.value); setLookupError(''); setResolved(null) }}
+          onKeyDown={e => e.key === 'Enter' && handleLookup()}
+          placeholder="@username"
+          disabled={!isCorrectNetwork}
+          style={{
+            flex: 1,
+            background: '#f9fafb', border: '1px solid #e5e7eb',
+            borderRadius: '12px', padding: '12px 14px',
+            color: '#111827', fontSize: '14px', fontWeight: 600,
+            outline: 'none', fontFamily: 'monospace',
+          }}
+        />
         <button
           onClick={handleLookup}
           disabled={!lookup.trim() || looking || !isCorrectNetwork}
           style={{
-            background: lookup.trim() && !looking && isCorrectNetwork
-              ? 'linear-gradient(135deg, #7c3aed, #9f5aff)'
-              : 'var(--surface-raised)',
-            border: '1px solid var(--border)',
+            background: lookup.trim() && !looking && isCorrectNetwork ? '#111827' : '#f3f4f6',
+            border: 'none',
             borderRadius: '12px', padding: '12px 20px',
-            color: lookup.trim() && !looking && isCorrectNetwork ? 'white' : 'var(--text-secondary)',
+            color: lookup.trim() && !looking && isCorrectNetwork ? 'white' : '#9ca3af',
             fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
             transition: 'all 0.2s',
           }}
@@ -668,7 +578,7 @@ function LookupForm() {
           marginTop: '12px', background: 'rgba(0,212,168,0.08)',
           border: '1px solid rgba(0,212,168,0.3)', borderRadius: '12px', padding: '14px 16px',
         }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '4px', fontWeight: 600 }}>Resolved address</p>
+          <p style={{ color: '#6b7280', fontSize: '12px', marginBottom: '4px', fontWeight: 600 }}>Resolved address</p>
           <p style={{ fontFamily: 'monospace', fontSize: '14px', color: '#00d4a8', wordBreak: 'break-all' }}>
             {resolved}
           </p>

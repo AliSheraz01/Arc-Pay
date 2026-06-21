@@ -10,11 +10,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  address   String   @unique
-  username  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  username           String   @unique
+  arcAddress         String?
+  ethSepoliaAddress  String?
+  baseSepoliaAddress String?
+  solanaAddress      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Transaction {
@@ -22,6 +25,8 @@ model Transaction {
   txHash          String   @unique
   fromAddress     String
   toAddress       String
+  fromChain       String?
+  toChain         String?
   amount          String   // Store as string to handle large uint256 numbers accurately
   memo            String?
   status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED

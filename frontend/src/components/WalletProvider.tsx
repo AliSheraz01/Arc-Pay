@@ -6,7 +6,6 @@ import {
   metaMaskWallet,
   coinbaseWallet,
   walletConnectWallet,
-  injectedWallet,
   rabbyWallet,
   trustWallet,
 } from '@rainbow-me/rainbowkit/wallets'
@@ -53,7 +52,6 @@ const connectors = connectorsForWallets(
     {
       groupName: 'Recommended',
       wallets: [
-        injectedWallet as any,
         metaMaskWallet as any,
         rabbyWallet as any,
         coinbaseWallet as any,

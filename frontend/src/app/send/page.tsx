@@ -16,10 +16,10 @@ import { MdArrowBack, MdAccessTime, MdCheckCircle, MdSearch, MdErrorOutline } fr
 type Step = 'form' | 'confirm' | 'cctp_progress' | 'success'
 
 const CHAINS = [
-  { id: arcTestnet.id.toString(), name: 'Arc Testnet', type: 'evm' },
-  { id: sepolia.id.toString(), name: 'Ethereum Sepolia', type: 'evm' },
-  { id: baseSepolia.id.toString(), name: 'Base Sepolia', type: 'evm' },
-  { id: 'solana-devnet', name: 'Solana Devnet', type: 'solana' }
+  { id: arcTestnet.id.toString(), name: 'Arc Testnet', type: 'evm', icon: 'https://arc.network/favicon.ico' },
+  { id: sepolia.id.toString(), name: 'Ethereum Sepolia', type: 'evm', icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png' },
+  { id: baseSepolia.id.toString(), name: 'Base Sepolia', type: 'evm', icon: 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.svg' },
+  { id: 'solana-devnet', name: 'Solana Devnet', type: 'solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.png' }
 ]
 
 function SendForm() {
@@ -117,6 +117,15 @@ function SendForm() {
   }
 
   useEffect(() => {
+    if (currentChainId) {
+      const chainStr = currentChainId.toString()
+      if (CHAINS.some(c => c.id === chainStr)) {
+        setSendFrom(chainStr)
+      }
+    }
+  }, [currentChainId])
+
+  useEffect(() => {
     updateResolvedAddressForChain(receiveOn)
   }, [receiveOn])
 
@@ -179,35 +188,41 @@ function SendForm() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Send From</label>
-                <select 
-                  value={sendFrom} 
-                  onChange={e => {
-                    const val = e.target.value
-                    setSendFrom(val)
-                    if (val !== 'solana-devnet' && switchChain) {
-                      switchChain({ chainId: Number(val) })
-                    }
-                  }}
-                  style={{
-                    width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                    borderRadius: '12px', padding: '12px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none'
-                  }}
-                >
-                  {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <img src={CHAINS.find(c => c.id === sendFrom)?.icon} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', borderRadius: '50%', pointerEvents: 'none', objectFit: 'contain' }} alt="" />
+                  <select 
+                    value={sendFrom} 
+                    onChange={e => {
+                      const val = e.target.value
+                      setSendFrom(val)
+                      if (val !== 'solana-devnet' && switchChain) {
+                        switchChain({ chainId: Number(val) })
+                      }
+                    }}
+                    style={{
+                      width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                      borderRadius: '12px', padding: '12px 12px 12px 40px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none', appearance: 'none'
+                    }}
+                  >
+                    {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Receive On</label>
-                <select 
-                  value={receiveOn} 
-                  onChange={e => setReceiveOn(e.target.value)}
-                  style={{
-                    width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                    borderRadius: '12px', padding: '12px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none'
-                  }}
-                >
-                  {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <img src={CHAINS.find(c => c.id === receiveOn)?.icon} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', borderRadius: '50%', pointerEvents: 'none', objectFit: 'contain' }} alt="" />
+                  <select 
+                    value={receiveOn} 
+                    onChange={e => setReceiveOn(e.target.value)}
+                    style={{
+                      width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                      borderRadius: '12px', padding: '12px 12px 12px 40px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none', appearance: 'none'
+                    }}
+                  >
+                    {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -298,11 +313,17 @@ function SendForm() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>From</span>
-                  <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === sendFrom)?.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <img src={CHAINS.find(c => c.id === sendFrom)?.icon} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain' }} alt="" />
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === sendFrom)?.name}</span>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>To</span>
-                  <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === receiveOn)?.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <img src={CHAINS.find(c => c.id === receiveOn)?.icon} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain' }} alt="" />
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === receiveOn)?.name}</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, Suspense } from 'react'
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { parseUnits, isAddress } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
@@ -49,6 +49,7 @@ function SendForm() {
   const [cctpPhase, setCctpPhase] = useState<'burning' | 'attesting' | 'minting'>('burning')
 
   const { writeContractAsync } = useWriteContract()
+  const { switchChain } = useSwitchChain()
 
   // Simplified balance reading for current chain
   const { data: usdcBalance } = useReadContract({
@@ -180,7 +181,13 @@ function SendForm() {
                 <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Send From</label>
                 <select 
                   value={sendFrom} 
-                  onChange={e => setSendFrom(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value
+                    setSendFrom(val)
+                    if (val !== 'solana-devnet' && switchChain) {
+                      switchChain({ chainId: Number(val) })
+                    }
+                  }}
                   style={{
                     width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
                     borderRadius: '12px', padding: '12px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none'

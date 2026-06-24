@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useReadContract, useChainId } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { USDC_ADDRESS, BACKEND_URL, EXPLORER_URL } from '@/lib/constants'
@@ -159,8 +160,16 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              Connect your wallet at the top right to access the dashboard
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
+              <ConnectButton
+                accountStatus="address"
+                chainStatus="icon"
+                showBalance={false}
+                label="Connect Wallet"
+              />
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '16px' }}>
+              Connect your wallet to access the dashboard
             </p>
           </div>
         ) : (

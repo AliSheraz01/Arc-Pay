@@ -96,8 +96,65 @@ function SendPaymentTab() {
   const [amount, setAmount] = useState('')
   const { chains } = useSwitchChain()
   const chainId = useChainId()
+  const [destChainId, setDestChainId] = useState<number>(chains[0]?.id || 0)
   
   const currentChain = chains.find(c => c.id === chainId)
+
+  // Integrate Wagmi to prompt the wallet
+  import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+  import { parseUnits } from 'viem'
+  
+  const { writeContract, data: hash, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
+
+  const handleSendCrossChain = async () => {
+    if (!amount || !recipient) return
+    
+    // We need to resolve the username if it starts with @
+    let resolvedAddress = recipient
+    if (recipient.startsWith('@')) {
+      try {
+        const res = await fetch(`http://localhost:3001/api/resolve/${recipient.replace('@', '')}`)
+        if (res.ok) {
+          const data = await res.json()
+          resolvedAddress = data.address
+        } else {
+          alert('Username not found on Arc Network')
+          return
+        }
+      } catch (err) {
+        alert('Failed to resolve username')
+        return
+      }
+    }
+
+    // Mock CCTP TokenMessenger Address (Replace with real ones per chain)
+    const TOKEN_MESSENGER = '0x1234567890123456789012345678901234567890' 
+    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Sepolia USDC
+
+    writeContract({
+      address: TOKEN_MESSENGER,
+      abi: [{
+        "inputs": [
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "uint32", "name": "destinationDomain", "type": "uint32" },
+          { "internalType": "bytes32", "name": "mintRecipient", "type": "bytes32" },
+          { "internalType": "address", "name": "burnToken", "type": "address" }
+        ],
+        "name": "depositForBurn",
+        "outputs": [{ "internalType": "uint64", "name": "nonce", "type": "uint64" }],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }],
+      functionName: 'depositForBurn',
+      args: [
+        parseUnits(amount, 6),
+        0, // Domain (e.g. 0 for Ethereum, 3 for Arbitrum)
+        '0x000000000000000000000000' + resolvedAddress.replace('0x', ''), // Pad to bytes32
+        USDC_ADDRESS
+      ]
+    })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -110,7 +167,11 @@ function SendPaymentTab() {
         </div>
         <div style={{ flex: 1 }}>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Destination Chain</label>
-          <select style={{ width: '100%', padding: '14px', background: 'var(--surface-raised)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600, outline: 'none' }}>
+          <select 
+            value={destChainId}
+            onChange={e => setDestChainId(Number(e.target.value))}
+            style={{ width: '100%', padding: '14px', background: 'var(--surface-raised)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600, outline: 'none' }}
+          >
             {chains.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -140,11 +201,21 @@ function SendPaymentTab() {
         />
       </div>
 
-      <button style={{
-        width: '100%', padding: '18px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: 'pointer', marginTop: '12px', boxShadow: '0 4px 16px rgba(16, 53, 246, 0.3)', transition: 'all 0.2s'
-      }}>
-        Send Cross-Chain Payment
+      <button 
+        onClick={handleSendCrossChain}
+        disabled={isPending || isConfirming}
+        style={{
+          width: '100%', padding: '18px', background: (isPending || isConfirming) ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: (isPending || isConfirming) ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: (isPending || isConfirming) ? 'none' : '0 4px 16px rgba(16, 53, 246, 0.3)', transition: 'all 0.2s'
+        }}
+      >
+        {isPending ? 'Confirm in Wallet...' : isConfirming ? 'Processing Transaction...' : 'Send Cross-Chain Payment'}
       </button>
+
+      {isConfirmed && (
+        <div style={{ padding: '12px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', textAlign: 'center', fontWeight: 700 }}>
+          Transaction successful! TX: {hash?.slice(0,10)}...
+        </div>
+      )}
     </div>
   )
 }

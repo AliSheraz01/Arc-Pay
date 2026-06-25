@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdArrowBack, MdArrowDownward, MdTimer, MdLocalGasStation, MdCheckCircle } from 'react-icons/md'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits } from 'viem'
 
 export default function BridgePage() {
-  const { isConnected } = useAccount()
+  const { address, isConnected } = useAccount()
   const { chains } = useSwitchChain()
   const chainId = useChainId()
   const [amount, setAmount] = useState('')
@@ -16,13 +18,46 @@ export default function BridgePage() {
 
   const currentChain = chains.find(c => c.id === chainId)
 
+  const { writeContract, data: hash, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
+
   const handleBridge = () => {
-    setBridgeStatus('burning')
-    setTimeout(() => setBridgeStatus('attesting'), 2000)
-    setTimeout(() => setBridgeStatus('minting'), 4000)
-    setTimeout(() => setBridgeStatus('complete'), 6000)
-    setTimeout(() => setBridgeStatus('idle'), 9000)
+    if (!amount) return
+
+    const TOKEN_MESSENGER = '0x1234567890123456789012345678901234567890' 
+    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' 
+
+    writeContract({
+      address: TOKEN_MESSENGER,
+      abi: [{
+        "inputs": [
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "uint32", "name": "destinationDomain", "type": "uint32" },
+          { "internalType": "bytes32", "name": "mintRecipient", "type": "bytes32" },
+          { "internalType": "address", "name": "burnToken", "type": "address" }
+        ],
+        "name": "depositForBurn",
+        "outputs": [{ "internalType": "uint64", "name": "nonce", "type": "uint64" }],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }],
+      functionName: 'depositForBurn',
+      args: [
+        parseUnits(amount, 6),
+        0, 
+        '0x000000000000000000000000' + address?.replace('0x', ''), 
+        USDC_ADDRESS
+      ]
+    })
   }
+
+  // Update bridge status tracker based on Wagmi status
+  useEffect(() => {
+    if (isPending) setBridgeStatus('burning')
+    else if (isConfirming) setBridgeStatus('attesting')
+    else if (isConfirmed) setBridgeStatus('complete')
+    else setBridgeStatus('idle')
+  }, [isPending, isConfirming, isConfirmed])
 
   if (!isConnected) {
     return (
@@ -131,8 +166,8 @@ export default function BridgePage() {
               }}
             >
               {bridgeStatus === 'idle' && 'Bridge USDC'}
-              {bridgeStatus === 'burning' && 'Burning USDC on Source...'}
-              {bridgeStatus === 'attesting' && 'Waiting for Circle Attestation...'}
+              {bridgeStatus === 'burning' && 'Confirm in Wallet...'}
+              {bridgeStatus === 'attesting' && 'Processing Transaction...'}
               {bridgeStatus === 'minting' && 'Minting USDC on Destination...'}
               {bridgeStatus === 'complete' && 'Bridge Complete!'}
             </button>
@@ -143,7 +178,7 @@ export default function BridgePage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: bridgeStatus === 'complete' ? 'var(--green)' : 'var(--text-primary)' }}>
                   <MdCheckCircle size={20} />
                   <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                    {bridgeStatus === 'burning' ? 'Transaction pending...' : 'Success'}
+                    {bridgeStatus === 'burning' ? 'Pending wallet approval...' : bridgeStatus === 'complete' ? `Success! TX: ${hash?.slice(0,10)}...` : 'Processing...'}
                   </span>
                 </div>
               </div>

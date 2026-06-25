@@ -4,25 +4,43 @@ import { defineChain } from 'viem'
 export const arcTestnet = defineChain({
   id: 5042002,
   name: 'Arc Testnet',
-  nativeCurrency: {
-    name: 'USDC',
-    symbol: 'USDC',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://rpc.testnet.arc.network'],
-      webSocket: ['wss://rpc.testnet.arc.network'],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'ArcScan',
-      url: 'https://testnet.arcscan.app',
-    },
-  },
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.testnet.arc.network'] } },
   testnet: true,
 })
+
+export const sonicTestnet = defineChain({
+  id: 57054,
+  name: 'Sonic Testnet',
+  nativeCurrency: { name: 'S', symbol: 'S', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.testnet.soniclabs.com'] } },
+  testnet: true,
+})
+
+export const monadTestnet = defineChain({
+  id: 10143,
+  name: 'Monad Testnet',
+  nativeCurrency: { name: 'MONAD', symbol: 'MONAD', decimals: 18 },
+  rpcUrls: { default: { http: ['https://testnet-rpc.monad.xyz'] } },
+  testnet: true,
+})
+
+export const unichainSepolia = defineChain({
+  id: 1301,
+  name: 'Unichain Sepolia',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://sepolia.unichain.org'] } },
+  testnet: true,
+})
+
+export const inkTestnet = defineChain({
+  id: 763373,
+  name: 'Ink Testnet',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc-gel-sepolia.inkonchain.com'] } },
+  testnet: true,
+})
+
 
 export const ARC_CHAIN_ID = 5042002
 

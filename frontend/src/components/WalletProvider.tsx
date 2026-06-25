@@ -11,7 +11,8 @@ import {
 } from '@rainbow-me/rainbowkit/wallets'
 import { WagmiProvider, createConfig, createStorage, http } from 'wagmi'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
-import { arcTestnet } from '@/lib/constants'
+import { arcTestnet, sonicTestnet, monadTestnet, unichainSepolia, inkTestnet } from '@/lib/constants'
+import { sepolia, arbitrumSepolia, baseSepolia, lineaSepolia, optimismSepolia } from 'wagmi/chains'
 import React from 'react'
 
 // ── Safe localStorage wrapper
@@ -66,10 +67,30 @@ const connectors = connectorsForWallets(
 
 // ── Wagmi config with explicit connectors (no getDefaultConfig)
 const config = createConfig({
-  chains: [arcTestnet],
+  chains: [
+    arcTestnet, 
+    sepolia, 
+    arbitrumSepolia, 
+    baseSepolia, 
+    lineaSepolia, 
+    optimismSepolia, 
+    sonicTestnet, 
+    monadTestnet, 
+    unichainSepolia, 
+    inkTestnet
+  ],
   connectors,
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
+    [sepolia.id]: http(),
+    [arbitrumSepolia.id]: http(),
+    [baseSepolia.id]: http(),
+    [lineaSepolia.id]: http(),
+    [optimismSepolia.id]: http(),
+    [sonicTestnet.id]: http(),
+    [monadTestnet.id]: http(),
+    [unichainSepolia.id]: http(),
+    [inkTestnet.id]: http(),
   },
   ssr: false,
   storage: safeStorage,

@@ -1,17 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
 import dotenv from 'dotenv';
 import { createPublicClient, http, decodeFunctionData } from 'viem';
 
 dotenv.config();
 
 const app = express();
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL || 'file:./dev.db',
-});
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
@@ -20,6 +16,47 @@ app.use(express.json());
 // Basic health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', network: 'Arc Testnet' });
+});
+
+// ==========================================
+// CCTP & Recovery Engine Routes
+// ==========================================
+
+app.post('/api/cctp/attestation', async (req, res) => {
+  const { messageHash } = req.body;
+  try {
+    // Mock attestation check (in reality, query Circle Iris API)
+    const status = Math.random() > 0.5 ? 'complete' : 'pending';
+    res.json({ status, attestation: status === 'complete' ? '0xmockattestation...' : null });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch attestation' });
+  }
+});
+
+app.post('/api/recovery/scan', async (req, res) => {
+  const { address } = req.body;
+  try {
+    // Mock scanning for stuck transactions
+    const stuckTx = await prisma.recoveryRequest.findMany({
+      where: { userAddress: address.toLowerCase(), status: 'PENDING' }
+    });
+    res.json({ stuckTransactions: stuckTx });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to scan' });
+  }
+});
+
+app.post('/api/recovery/claim', async (req, res) => {
+  const { recoveryId } = req.body;
+  try {
+    const reqDb = await prisma.recoveryRequest.update({
+      where: { id: recoveryId },
+      data: { status: 'RECOVERED' }
+    });
+    res.json({ success: true, request: reqDb });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to claim' });
+  }
 });
 
 // Get user profile by address

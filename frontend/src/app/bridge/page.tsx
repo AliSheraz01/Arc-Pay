@@ -16,19 +16,23 @@ export default function BridgePage() {
   const [amount, setAmount] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'burning' | 'attesting' | 'minting' | 'complete'>('idle')
 
+  const [destChainId, setDestChainId] = useState<number>(chains[0]?.id || 0)
+
   const currentChain = chains.find(c => c.id === chainId)
 
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
+  // Real CCTP configs
+  import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
+
   const handleBridge = () => {
     if (!amount) return
 
-    const TOKEN_MESSENGER = '0x1234567890123456789012345678901234567890' 
     const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' 
 
     writeContract({
-      address: TOKEN_MESSENGER,
+      address: CCTP_TOKEN_MESSENGER,
       abi: [{
         "inputs": [
           { "internalType": "uint256", "name": "amount", "type": "uint256" },
@@ -44,7 +48,7 @@ export default function BridgePage() {
       functionName: 'depositForBurn',
       args: [
         parseUnits(amount, 6),
-        0, 
+        getCctpDomain(destChainId), 
         '0x000000000000000000000000' + address?.replace('0x', ''), 
         USDC_ADDRESS
       ]
@@ -116,7 +120,11 @@ export default function BridgePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>To Network</span>
               </div>
-              <select style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '18px', fontWeight: 800, outline: 'none', appearance: 'none', cursor: 'pointer' }}>
+              <select 
+                value={destChainId}
+                onChange={e => setDestChainId(Number(e.target.value))}
+                style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '18px', fontWeight: 800, outline: 'none', appearance: 'none', cursor: 'pointer' }}
+              >
                 {chains.map(c => (
                   <option key={c.id} value={c.id} style={{ background: 'var(--surface)' }}>{c.name}</option>
                 ))}

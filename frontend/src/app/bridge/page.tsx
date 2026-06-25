@@ -34,7 +34,7 @@ export default function BridgePage() {
     query: { enabled: !!address },
   })
 
-  const formattedBalance = usdcBalance ? Number(parseUnits(usdcBalance.toString(), 0)) / 1e6 : 0
+  const formattedBalance = usdcBalance ? Number(usdcBalance) / 1e6 : 0
 
   const handleBridge = () => {
     if (!amount) return

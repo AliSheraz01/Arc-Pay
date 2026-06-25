@@ -5,7 +5,9 @@ import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdSend, MdHistory, MdHealing, MdArrowBack } from 'react-icons/md'
 import Link from 'next/link'
-import { useAccount, useSwitchChain, useChainId } from 'wagmi'
+import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits } from 'viem'
+import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
 
 export default function CrossPayPage() {
   const [activeTab, setActiveTab] = useState<'send' | 'history' | 'recovery'>('send')
@@ -101,9 +103,6 @@ function SendPaymentTab() {
   const currentChain = chains.find(c => c.id === chainId)
 
   // Integrate Wagmi to prompt the wallet
-  import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-  import { parseUnits } from 'viem'
-  import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
   
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })

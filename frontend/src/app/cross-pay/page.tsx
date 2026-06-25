@@ -103,6 +103,7 @@ function SendPaymentTab() {
   // Integrate Wagmi to prompt the wallet
   import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
   import { parseUnits } from 'viem'
+  import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
   
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
@@ -128,12 +129,10 @@ function SendPaymentTab() {
       }
     }
 
-    // Mock CCTP TokenMessenger Address (Replace with real ones per chain)
-    const TOKEN_MESSENGER = '0x1234567890123456789012345678901234567890' 
-    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Sepolia USDC
+    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Example Sepolia USDC
 
     writeContract({
-      address: TOKEN_MESSENGER,
+      address: CCTP_TOKEN_MESSENGER,
       abi: [{
         "inputs": [
           { "internalType": "uint256", "name": "amount", "type": "uint256" },
@@ -149,7 +148,7 @@ function SendPaymentTab() {
       functionName: 'depositForBurn',
       args: [
         parseUnits(amount, 6),
-        0, // Domain (e.g. 0 for Ethereum, 3 for Arbitrum)
+        getCctpDomain(destChainId), // Map chainId to Circle Domain
         '0x000000000000000000000000' + resolvedAddress.replace('0x', ''), // Pad to bytes32
         USDC_ADDRESS
       ]

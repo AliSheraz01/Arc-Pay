@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { PageLayout } from '@/components/PageLayout'
-import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdArrowBack, MdArrowDownward, MdTimer, MdLocalGasStation, MdCheckCircle } from 'react-icons/md'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId } from 'wagmi'
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi'
 import { parseUnits } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
 
@@ -24,10 +23,17 @@ export default function BridgePage() {
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
+  const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
+
+  const { data: balanceData } = useBalance({
+    address: address as `0x${string}`,
+    token: USDC_ADDRESS as `0x${string}`,
+  })
+
+  const formattedBalance = balanceData ? Number(balanceData.value) / 10**balanceData.decimals : 0
+
   const handleBridge = () => {
     if (!amount) return
-
-    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' 
 
     writeContract({
       address: CCTP_TOKEN_MESSENGER,
@@ -78,14 +84,13 @@ export default function BridgePage() {
           <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
-        <NetworkGuard>
-          <div style={{ 
-            background: 'var(--surface)', 
-            border: '1px solid var(--border)', 
-            borderRadius: '24px', 
-            padding: '28px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
+        <div style={{ 
+          background: 'var(--surface)', 
+          border: '1px solid var(--border)', 
+          borderRadius: '24px', 
+          padding: '28px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+        }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
               <div>
                 <h1 style={{ fontSize: '26px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '4px', letterSpacing: '-0.02em' }}>CCTP Bridge</h1>
@@ -100,7 +105,7 @@ export default function BridgePage() {
             <div style={{ background: 'var(--surface-raised)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>From Network</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Balance: 0.00 USDC</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Balance: {formattedBalance.toFixed(2)} USDC</span>
               </div>
               <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
                 {currentChain?.name || 'Unknown'} (Current)
@@ -190,7 +195,6 @@ export default function BridgePage() {
               </div>
             )}
           </div>
-        </NetworkGuard>
       </main>
     </PageLayout>
   )

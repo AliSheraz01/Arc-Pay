@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { PageLayout } from '@/components/PageLayout'
-import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdSend, MdHistory, MdHealing, MdArrowBack } from 'react-icons/md'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
@@ -30,7 +29,6 @@ export default function CrossPayPage() {
           <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
-        <NetworkGuard>
           <div style={{ 
             background: 'var(--surface)', 
             border: '1px solid var(--border)', 
@@ -87,7 +85,6 @@ export default function CrossPayPage() {
             {activeTab === 'recovery' && <RecoveryEngineTab />}
 
           </div>
-        </NetworkGuard>
       </main>
     </PageLayout>
   )

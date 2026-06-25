@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
+import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
 
 export default function BridgePage() {
   const { address, isConnected } = useAccount()
@@ -22,9 +23,6 @@ export default function BridgePage() {
 
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
-
-  // Real CCTP configs
-  import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
 
   const handleBridge = () => {
     if (!amount) return

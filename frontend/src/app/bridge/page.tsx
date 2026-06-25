@@ -5,7 +5,8 @@ import { PageLayout } from '@/components/PageLayout'
 import { MdArrowBack, MdArrowDownward, MdTimer, MdLocalGasStation, MdCheckCircle } from 'react-icons/md'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId } from 'wagmi'
-import { useWriteContract, useWaitForTransactionReceipt, useBalance } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { USDC_ABI } from '@/lib/abi'
 import { parseUnits } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
 
@@ -25,12 +26,15 @@ export default function BridgePage() {
 
   const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
 
-  const { data: balanceData } = useBalance({
-    address: address as `0x${string}`,
-    token: USDC_ADDRESS as `0x${string}`,
+  const { data: usdcBalance } = useReadContract({
+    address: USDC_ADDRESS as `0x${string}`,
+    abi: USDC_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
   })
 
-  const formattedBalance = balanceData ? Number(balanceData.value) / 10**balanceData.decimals : 0
+  const formattedBalance = usdcBalance ? Number(parseUnits(usdcBalance.toString(), 0)) / 1e6 : 0
 
   const handleBridge = () => {
     if (!amount) return

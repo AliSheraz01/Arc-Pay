@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { PageLayout } from '@/components/PageLayout'
-import { MdSend, MdHistory, MdHealing, MdArrowBack } from 'react-icons/md'
+import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits } from 'viem'
-import { CCTP_TOKEN_MESSENGER, getCctpDomain } from '@/lib/constants'
+import { parseUnits, isAddress, createPublicClient, http } from 'viem'
+import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
+import { REGISTRY_ABI } from '@/lib/abi'
 
 export default function CrossPayPage() {
   const [activeTab, setActiveTab] = useState<'send' | 'history' | 'recovery'>('send')
@@ -97,34 +98,69 @@ function SendPaymentTab() {
   const chainId = useChainId()
   const [destChainId, setDestChainId] = useState<number>(chains[0]?.id || 0)
   
+  const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
+  const [resolving, setResolving] = useState(false)
+  const [resolveError, setResolveError] = useState('')
+
   const currentChain = chains.find(c => c.id === chainId)
 
-  // Integrate Wagmi to prompt the wallet
-  
   const { writeContract, data: hash, isPending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
-  const handleSendCrossChain = async () => {
-    if (!amount || !recipient) return
-    
-    // We need to resolve the username if it starts with @
-    let resolvedAddress = recipient
-    if (recipient.startsWith('@')) {
-      try {
-        const res = await fetch(`http://localhost:3001/api/resolve/${recipient.replace('@', '')}`)
-        if (res.ok) {
-          const data = await res.json()
-          resolvedAddress = data.address
-        } else {
-          alert('Username not found on Arc Network')
-          return
-        }
-      } catch (err) {
-        alert('Failed to resolve username')
-        return
-      }
+  const resolveRecipient = useCallback(async (value: string) => {
+    setResolveError('')
+    setResolvedAddress(null)
+
+    if (!value) return
+
+    if (isAddress(value)) {
+      setResolvedAddress(value as `0x${string}`)
+      return
     }
 
+    const username = value.startsWith('@') ? value.slice(1) : value
+    if (!username) return
+
+    setResolving(true)
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/resolve/${username}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.address) {
+          setResolvedAddress(data.address as `0x${string}`)
+          return
+        }
+      }
+      throw new Error('backend failed')
+    } catch {
+      try {
+        const client = createPublicClient({
+          chain: arcTestnet,
+          transport: http('https://rpc.testnet.arc.network'),
+        })
+        const resolved = await client.readContract({
+          address: REGISTRY_ADDRESS,
+          abi: REGISTRY_ABI,
+          functionName: 'resolveUsername',
+          args: [username.toLowerCase()],
+        }) as `0x${string}`
+
+        if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
+          setResolvedAddress(resolved)
+          return
+        }
+      } catch (onChainErr) {
+        console.error('On-chain resolve failed:', onChainErr)
+      }
+      setResolveError(`Could not find user "@${username}"`)
+    } finally {
+      setResolving(false)
+    }
+  }, [])
+
+  const handleSendCrossChain = async () => {
+    if (!amount || !resolvedAddress) return
+    
     const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Example Sepolia USDC
 
     writeContract({
@@ -180,9 +216,19 @@ function SendPaymentTab() {
           type="text" 
           placeholder="@alisheraz0ev or 0x..." 
           value={recipient}
-          onChange={e => setRecipient(e.target.value)}
+          onChange={e => {
+            setRecipient(e.target.value)
+            resolveRecipient(e.target.value)
+          }}
           style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '16px', outline: 'none' }}
         />
+        {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving username...</div>}
+        {resolveError && <div style={{ fontSize: '12px', color: '#ff4466', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdErrorOutline /> {resolveError}</div>}
+        {resolvedAddress && !resolving && !resolveError && recipient !== resolvedAddress && (
+          <div style={{ fontSize: '12px', color: 'var(--green)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <MdCheckCircle /> Resolved: {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+          </div>
+        )}
       </div>
 
       <div>

@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model User {
@@ -18,29 +18,46 @@ model User {
 }
 
 model Transaction {
-  id              String   @id @default(uuid())
-  txHash          String   @unique
-  fromAddress     String
-  toAddress       String
-  amount          String   // Store as string to handle large uint256 numbers accurately
-  memo            String?
-  status          String   @default("COMPLETED") // PENDING, COMPLETED, FAILED
-  blockNumber     Int
-  timestamp       DateTime @default(now())
+  id                String   @id @default(uuid())
+  txHash            String
+  fromAddress       String
+  toAddress         String
+  amount            String
+  memo              String?
+  status            String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, RECOVERED
+  blockNumber       Int
+  sourceChain       Int?     // chainId
+  destinationChain  Int?     // chainId
+  recipientUsername String?
+  cctpMessageId     String?  @unique
+  timestamp         DateTime @default(now())
 }
 
 model PaymentRequest {
   id          String   @id @default(uuid())
-  fromAddress String   // The person requesting the payment
-  toAddress   String?  // Optional, if directed at a specific person
+  fromAddress String
+  toAddress   String?
   amount      String
   memo        String?
-  status      String   @default("PENDING") // PENDING, PAID, CANCELLED
+  status      String   @default("PENDING")
   createdAt   DateTime @default(now())
 }
 
 model SyncState {
   key   String @id
   value String
+}
+
+model RecoveryRequest {
+  id            String   @id @default(uuid())
+  transactionId String   @unique
+  userAddress   String
+  amount        String
+  sourceChain   Int
+  destChain     Int
+  status        String   @default("PENDING") // PENDING, RECOVERED, FAILED
+  cctpMessageId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 

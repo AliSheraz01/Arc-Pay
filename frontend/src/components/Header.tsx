@@ -35,10 +35,9 @@ export function Header() {
     }}>
       {/* Left side: Network status on desktop, Logo on mobile */}
       <div style={{ display: 'flex', alignItems: 'center' }}>
-        {/* Desktop: Arc Testnet status */}
+        {/* Desktop: Network dropdown via RainbowKit (ConnectButton handles it natively when chainStatus="full") */}
         <div className="header-desktop-status" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
-          <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 700 }}>Arc Testnet</span>
+          {/* We will let the right side ConnectButton handle network selection */}
         </div>
 
         {/* Mobile: Logo */}
@@ -70,7 +69,7 @@ export function Header() {
         <FaucetModal />
         <ConnectButton
           accountStatus="address"
-          chainStatus="icon"
+          chainStatus="full"
           showBalance={false}
           label="Connect Wallet"
         />

@@ -38,11 +38,19 @@ export function Sidebar() {
     document.documentElement.setAttribute('data-theme', nextTheme)
   }
 
+  const isCrossPayEnabled = process.env.NEXT_PUBLIC_ENABLE_CROSS_PAY === 'true'
+
   const navItems = [
     { href: '/', label: 'Home', icon: MdHome },
     { href: '/send', label: 'Send', icon: MdSend },
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
-    { href: '/history', label: 'Transactions', icon: MdHistory },
+    ...(isCrossPayEnabled
+      ? [
+          { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome },
+          { href: '/bridge', label: 'Bridge', icon: MdLink }
+        ]
+      : [{ href: '/history', label: 'Transactions', icon: MdHistory }]
+    ),
     { href: '/profile', label: 'Profile', icon: MdPerson },
     { href: '/receive?tab=request', label: 'Payment Links', icon: MdLink },
     { href: '/agent', label: 'AI Pay', icon: MdAutoAwesome },

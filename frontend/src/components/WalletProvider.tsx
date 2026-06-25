@@ -6,20 +6,14 @@ import {
   metaMaskWallet,
   coinbaseWallet,
   walletConnectWallet,
+  injectedWallet,
   rabbyWallet,
   trustWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 import { WagmiProvider, createConfig, createStorage, http } from 'wagmi'
-import { sepolia, baseSepolia } from 'wagmi/chains'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { arcTestnet } from '@/lib/constants'
-import React, { useMemo } from 'react'
-
-// Solana Imports
-import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react'
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
-import { clusterApiUrl } from '@solana/web3.js'
-import '@solana/wallet-adapter-react-ui/styles.css'
+import React from 'react'
 
 // ── Safe localStorage wrapper
 const safeStorage = createStorage({
@@ -46,12 +40,13 @@ const safeStorage = createStorage({
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? ''
 
-// ── Define wallet list
+// ── Define wallet list — MetaMask / injected first so it works without WalletConnect
 const connectors = connectorsForWallets(
   [
     {
       groupName: 'Recommended',
       wallets: [
+        injectedWallet as any,
         metaMaskWallet as any,
         rabbyWallet as any,
         coinbaseWallet as any,
@@ -71,14 +66,12 @@ const connectors = connectorsForWallets(
   }
 )
 
-// ── Wagmi config
+// ── Wagmi config with explicit connectors (no getDefaultConfig)
 const config = createConfig({
-  chains: [arcTestnet, sepolia, baseSepolia],
+  chains: [arcTestnet],
   connectors,
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
-    [sepolia.id]: http(),
-    [baseSepolia.id]: http(),
   },
   ssr: false,
   storage: safeStorage,
@@ -99,6 +92,7 @@ const queryClient = new QueryClient({
   },
 })
 
+// ── Error boundary
 class WalletErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean }
@@ -113,7 +107,17 @@ class WalletErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
-    console.warn('[EasyZpay] Wallet error:', error.message)
+    if (
+      error.message.includes('not found') ||
+      error.message.includes('connector') ||
+      error.message.includes('MetaMask') ||
+      error.message.includes('WalletConnect') ||
+      error.message.includes('session')
+    ) {
+      console.warn('[EasyZpay] Wallet connector error (non-fatal):', error.message)
+    } else {
+      console.error('[EasyZpay] Unexpected error:', error)
+    }
   }
 
   render() {
@@ -142,43 +146,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect()
   }, [])
 
-  const solanaEndpoint = useMemo(() => clusterApiUrl('devnet'), [])
-  const solanaWallets = useMemo(() => [], [])
-
   return (
     <WalletErrorBoundary>
-      <ConnectionProvider endpoint={solanaEndpoint}>
-        <SolanaWalletProvider wallets={solanaWallets} autoConnect>
-          <WalletModalProvider>
-            <WagmiProvider config={config} reconnectOnMount={true}>
-              <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider
-                  theme={
-                    activeTheme === 'dark'
-                      ? darkTheme({
-                          accentColor: '#1035f6',
-                          accentColorForeground: 'white',
-                          borderRadius: 'large',
-                          fontStack: 'system',
-                          overlayBlur: 'small',
-                        })
-                      : lightTheme({
-                          accentColor: '#1035f6',
-                          accentColorForeground: 'white',
-                          borderRadius: 'large',
-                          fontStack: 'system',
-                          overlayBlur: 'small',
-                        })
-                  }
-                  locale="en-US"
-                >
-                  {children}
-                </RainbowKitProvider>
-              </QueryClientProvider>
-            </WagmiProvider>
-          </WalletModalProvider>
-        </SolanaWalletProvider>
-      </ConnectionProvider>
+      <WagmiProvider config={config} reconnectOnMount={true}>
+        <QueryClientProvider client={queryClient}>
+          <RainbowKitProvider
+            theme={
+              activeTheme === 'dark'
+                ? darkTheme({
+                    accentColor: '#1035f6', // Match our royal blue accent
+                    accentColorForeground: 'white',
+                    borderRadius: 'large',
+                    fontStack: 'system',
+                    overlayBlur: 'small',
+                  })
+                : lightTheme({
+                    accentColor: '#1035f6', // Match our royal blue accent
+                    accentColorForeground: 'white',
+                    borderRadius: 'large',
+                    fontStack: 'system',
+                    overlayBlur: 'small',
+                  })
+            }
+            locale="en-US"
+          >
+            {children}
+          </RainbowKitProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
     </WalletErrorBoundary>
   )
 }

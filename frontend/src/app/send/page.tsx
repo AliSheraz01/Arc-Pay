@@ -1,164 +1,149 @@
 'use client'
 
 import { useState, useCallback, useEffect, Suspense } from 'react'
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi'
-import { useWallet } from '@solana/wallet-adapter-react'
-import { parseUnits, isAddress } from 'viem'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { USDC_ADDRESS, ROUTER_ADDRESS, EXPLORER_URL, BACKEND_URL, arcTestnet } from '@/lib/constants'
-import { USDC_ABI, ROUTER_ABI } from '@/lib/abi'
-import { sepolia, baseSepolia } from 'wagmi/chains'
+import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL, arcTestnet } from '@/lib/constants'
+import { USDC_ABI, ROUTER_ABI, REGISTRY_ABI } from '@/lib/abi'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { MdArrowBack, MdAccessTime, MdCheckCircle, MdSearch, MdErrorOutline } from 'react-icons/md'
 
-type Step = 'form' | 'confirm' | 'cctp_progress' | 'success'
-
-const CHAINS = [
-  { id: arcTestnet.id.toString(), name: 'Arc Testnet', type: 'evm', icon: 'https://arc.network/favicon.ico' },
-  { id: sepolia.id.toString(), name: 'Ethereum Sepolia', type: 'evm', icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.png' },
-  { id: baseSepolia.id.toString(), name: 'Base Sepolia', type: 'evm', icon: 'https://raw.githubusercontent.com/base-org/brand-kit/main/logo/symbol/Base_Symbol_Blue.svg' },
-  { id: 'solana-devnet', name: 'Solana Devnet', type: 'solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.png' }
-]
+type Step = 'form' | 'confirm' | 'success'
 
 function SendForm() {
-  const { address: evmAddress, isConnected: isEvmConnected } = useAccount()
-  const currentChainId = useChainId()
-  const { publicKey, connected: isSolanaConnected } = useWallet()
-  const solanaAddress = publicKey?.toBase58()
-
+  const { address, isConnected } = useAccount()
   const searchParams = useSearchParams()
 
   const [step, setStep] = useState<Step>('form')
   const [recipient, setRecipient] = useState(() => searchParams.get('to') || '')
-  
-  // Wallet Map resolved from backend
-  const [resolvedWallets, setResolvedWallets] = useState<any>(null)
-  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
-  
+  const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
   const [amount, setAmount] = useState(() => searchParams.get('amount') || '')
   const [memo, setMemo] = useState(() => searchParams.get('memo') || '')
-  
-  const [sendFrom, setSendFrom] = useState(CHAINS[0].id)
-  const [receiveOn, setReceiveOn] = useState(CHAINS[0].id)
-
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState('')
-
-  const [cctpPhase, setCctpPhase] = useState<'burning' | 'attesting' | 'minting'>('burning')
+  const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
+  const [sendTxHash, setSendTxHash] = useState<`0x${string}` | undefined>()
+  const [phase, setPhase] = useState<'idle' | 'approving' | 'sending'>('idle')
 
   const { writeContractAsync } = useWriteContract()
-  const { switchChain } = useSwitchChain()
 
-  // Simplified balance reading for current chain
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: USDC_ABI,
     functionName: 'balanceOf',
-    args: evmAddress ? [evmAddress] : undefined,
-    query: { enabled: !!evmAddress },
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
   })
 
-  const balanceFormatted = usdcBalance ? parseFloat((Number(usdcBalance) / 1e6).toString()).toFixed(2) : '1000.00' // mock balance for demo
-  const amountNum = parseFloat(amount || '0')
-  const isValidAmount = !isNaN(amountNum) && amountNum > 0
+  const { isLoading: waitingApprove } = useWaitForTransactionReceipt({ hash: approveTxHash })
+  const { isLoading: waitingSend } = useWaitForTransactionReceipt({ hash: sendTxHash })
 
+  const balanceFormatted = usdcBalance ? parseFloat((Number(usdcBalance) / 1e6).toString()).toFixed(2) : '0.00'
+  const amountNum = parseFloat(amount || '0')
+  const isValidAmount = !isNaN(amountNum) && amountNum > 0 && amountNum <= parseFloat(balanceFormatted)
+
+  // Resolve username to address (backend first, then on-chain fallback)
   const resolveRecipient = useCallback(async (value: string) => {
     setResolveError('')
     setResolvedAddress(null)
-    setResolvedWallets(null)
 
     if (!value) return
 
+    // Check if it's already an address
     if (isAddress(value)) {
-      setResolvedAddress(value)
+      setResolvedAddress(value as `0x${string}`)
       return
     }
 
+    // Strip @ for username lookup
     const username = value.startsWith('@') ? value.slice(1) : value
     if (!username) return
 
     setResolving(true)
     try {
+      // 1. Try backend API first
       const res = await fetch(`${BACKEND_URL}/api/resolve/${username}`)
       if (res.ok) {
         const data = await res.json()
-        if (data.wallets) {
-          setResolvedWallets(data.wallets)
-          // Pre-select the destination address based on current receiveOn
-          updateResolvedAddressForChain(receiveOn, data.wallets)
+        if (data.address) {
+          setResolvedAddress(data.address as `0x${string}`)
           return
         }
       }
-      throw new Error('User not found')
-    } catch (e: any) {
+      throw new Error('backend failed')
+    } catch {
+      // 2. Fallback: query on-chain registry contract directly
+      try {
+        const client = createPublicClient({
+          chain: arcTestnet,
+          transport: http('https://rpc.testnet.arc.network'),
+        })
+        const resolved = await client.readContract({
+          address: REGISTRY_ADDRESS,
+          abi: REGISTRY_ABI,
+          functionName: 'resolveUsername',
+          args: [username.toLowerCase()],
+        }) as `0x${string}`
+
+        if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
+          setResolvedAddress(resolved)
+          return
+        }
+      } catch (onChainErr) {
+        console.error('On-chain resolve failed:', onChainErr)
+      }
       setResolveError(`Could not find user "@${username}"`)
     } finally {
       setResolving(false)
     }
-  }, [receiveOn])
+  }, [])
 
-  const updateResolvedAddressForChain = (chainId: string, wallets: any = resolvedWallets) => {
-    if (!wallets) return
-    let addr = null
-    if (chainId === arcTestnet.id.toString()) addr = wallets.arcTestnet
-    else if (chainId === sepolia.id.toString()) addr = wallets.ethSepolia
-    else if (chainId === baseSepolia.id.toString()) addr = wallets.baseSepolia
-    else if (chainId === 'solana-devnet') addr = wallets.solanaDevnet
-
-    if (addr) {
-      setResolvedAddress(addr)
-      setResolveError('')
-    } else {
-      setResolvedAddress(null)
-      setResolveError(`User has no linked wallet for the selected destination chain.`)
-    }
-  }
-
-  useEffect(() => {
-    if (currentChainId) {
-      const chainStr = currentChainId.toString()
-      if (CHAINS.some(c => c.id === chainStr)) {
-        setSendFrom(chainStr)
-      }
-    }
-  }, [currentChainId])
-
-  useEffect(() => {
-    updateResolvedAddressForChain(receiveOn)
-  }, [receiveOn])
-
+  // Auto-resolve on mount if query param is set
   useEffect(() => {
     const initialTo = searchParams.get('to')
-    if (initialTo) resolveRecipient(initialTo)
+    if (initialTo) {
+      resolveRecipient(initialTo)
+    }
   }, [searchParams, resolveRecipient])
 
   async function handleSend() {
     if (!resolvedAddress || !isValidAmount) return
-    
-    if (sendFrom === receiveOn) {
-      // Normal Transfer (simulated for now to avoid router requirements)
-      setStep('cctp_progress')
-      setCctpPhase('burning')
-      setTimeout(() => setStep('success'), 2000)
-    } else {
-      // Cross-Chain CCTP Flow Simulation
-      setStep('cctp_progress')
-      setCctpPhase('burning')
-      setTimeout(() => {
-        setCctpPhase('attesting')
-        setTimeout(() => {
-          setCctpPhase('minting')
-          setTimeout(() => {
-            setStep('success')
-          }, 2500)
-        }, 3000)
-      }, 2000)
+    setPhase('approving')
+
+    try {
+      const parsedAmount = parseUnits(amount, 6)
+
+      // 1. Approve Router to spend USDC
+      const approveTx = await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [ROUTER_ADDRESS, parsedAmount],
+      })
+      setApproveTxHash(approveTx)
+
+      // Wait briefly for approval
+      await new Promise(r => setTimeout(r, 3000))
+
+      setPhase('sending')
+
+      // 2. Send via Router contract
+      const sendTx = await writeContractAsync({
+        address: ROUTER_ADDRESS,
+        abi: ROUTER_ABI,
+        functionName: 'sendPayment',
+        args: [resolvedAddress, parsedAmount, memo],
+      })
+      setSendTxHash(sendTx)
+      setStep('success')
+    } catch (err) {
+      console.error('Payment failed:', err)
+      setPhase('idle')
     }
   }
-
-  const isConnected = isEvmConnected || isSolanaConnected
 
   if (!isConnected) {
     return (
@@ -177,234 +162,244 @@ function SendForm() {
           <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
-        {step === 'form' && (
-          <div style={{ 
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px', padding: '28px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Send USDC</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px' }}>Balance: {balanceFormatted} USDC</p>
+        <NetworkGuard>
+          {step === 'form' && (
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '28px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+            }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Send USDC</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '28px' }}>Balance: {balanceFormatted} USDC</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              <div>
-                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Send From</label>
+              {/* Recipient */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  To
+                </label>
                 <div style={{ position: 'relative' }}>
-                  <img src={CHAINS.find(c => c.id === sendFrom)?.icon} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', borderRadius: '50%', pointerEvents: 'none', objectFit: 'contain' }} alt="" />
-                  <select 
-                    value={sendFrom} 
+                  <input
+                    type="text"
+                    placeholder="@username or 0x address"
+                    value={recipient}
                     onChange={e => {
-                      const val = e.target.value
-                      setSendFrom(val)
-                      if (val !== 'solana-devnet' && switchChain) {
-                        switchChain({ chainId: Number(val) })
-                      }
+                      setRecipient(e.target.value)
+                      resolveRecipient(e.target.value)
                     }}
                     style={{
                       width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                      borderRadius: '12px', padding: '12px 12px 12px 40px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none', appearance: 'none'
+                      borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                      transition: 'border-color 0.2s',
                     }}
-                  >
-                    {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  />
                 </div>
+                {resolving && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch size={12} className="shimmer-rotate" /> Resolving username...</p>}
+                {resolvedAddress && !resolveError && (
+                  <p style={{ color: 'var(--green)', fontSize: '12px', marginTop: '6px', fontFamily: 'monospace', fontWeight: 600 }}>
+                    ✓ Resolved: {resolvedAddress.slice(0, 10)}…{resolvedAddress.slice(-8)}
+                  </p>
+                )}
+                {resolveError && (
+                  <p style={{ color: 'var(--red)', fontSize: '12px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <MdErrorOutline size={12} /> {resolveError}
+                  </p>
+                )}
               </div>
-              <div>
-                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>Receive On</label>
+
+              {/* Amount */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Amount
+                </label>
                 <div style={{ position: 'relative' }}>
-                  <img src={CHAINS.find(c => c.id === receiveOn)?.icon} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '20px', height: '20px', borderRadius: '50%', pointerEvents: 'none', objectFit: 'contain' }} alt="" />
-                  <select 
-                    value={receiveOn} 
-                    onChange={e => setReceiveOn(e.target.value)}
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
                     style={{
                       width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                      borderRadius: '12px', padding: '12px 12px 12px 40px', color: 'var(--text-primary)', fontSize: '14px', outline: 'none', appearance: 'none'
+                      borderRadius: '12px', padding: '14px 70px 14px 16px', color: 'var(--text-primary)',
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                      transition: 'border-color 0.2s',
                     }}
-                  >
-                    {CHAINS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  />
+                  <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800, fontSize: '14px' }}>
+                    USDC
+                  </span>
                 </div>
               </div>
-            </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                To (@username)
-              </label>
-              <input
-                type="text"
-                placeholder="@username"
-                value={recipient}
-                onChange={e => {
-                  setRecipient(e.target.value)
-                  resolveRecipient(e.target.value)
-                }}
-                style={{
-                  width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                  borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
-                  fontSize: '15px', outline: 'none', boxSizing: 'border-box'
-                }}
-              />
-              {resolving && <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '6px' }}><MdSearch size={12} className="shimmer-rotate" /> Resolving username...</p>}
-              {resolvedAddress && !resolveError && (
-                <p style={{ color: 'var(--green)', fontSize: '12px', marginTop: '6px', fontFamily: 'monospace', fontWeight: 600 }}>
-                  ✓ Destination: {resolvedAddress.slice(0, 10)}…{resolvedAddress.slice(-8)}
-                </p>
-              )}
-              {resolveError && (
-                <p style={{ color: 'var(--red)', fontSize: '12px', marginTop: '6px', fontWeight: 600 }}>
-                  <MdErrorOutline size={12} /> {resolveError}
-                </p>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '28px' }}>
-              <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-                Amount
-              </label>
-              <div style={{ position: 'relative' }}>
+              {/* Note */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
+                  Note (Optional)
+                </label>
                 <input
-                  type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)}
+                  type="text"
+                  placeholder="What is this for?"
+                  value={memo}
+                  onChange={e => setMemo(e.target.value)}
                   style={{
                     width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                    borderRadius: '12px', padding: '14px 70px 14px 16px', color: 'var(--text-primary)',
-                    fontSize: '15px', outline: 'none', boxSizing: 'border-box'
+                    borderRadius: '12px', padding: '14px 16px', color: 'var(--text-primary)',
+                    fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                    transition: 'border-color 0.2s',
                   }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
                 />
-                <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800, fontSize: '14px' }}>
-                  USDC
-                </span>
               </div>
+
+              <button
+                disabled={!resolvedAddress || !isValidAmount}
+                onClick={() => setStep('confirm')}
+                style={{
+                  width: '100%',
+                  background: resolvedAddress && isValidAmount ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
+                  border: 'none', borderRadius: '12px', padding: '16px',
+                  color: resolvedAddress && isValidAmount ? 'white' : 'var(--text-secondary)',
+                  fontSize: '15px', fontWeight: 800,
+                  cursor: resolvedAddress && isValidAmount ? 'pointer' : 'not-allowed',
+                  boxShadow: resolvedAddress && isValidAmount ? '0 4px 16px rgba(16, 53, 246, 0.25)' : 'none',
+                }}
+              >
+                Continue
+              </button>
             </div>
+          )}
 
-            <button
-              disabled={!resolvedAddress || !isValidAmount}
-              onClick={() => setStep('confirm')}
-              style={{
-                width: '100%', background: resolvedAddress && isValidAmount ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
-                border: 'none', borderRadius: '12px', padding: '16px', color: resolvedAddress && isValidAmount ? 'white' : 'var(--text-secondary)',
-                fontSize: '15px', fontWeight: 800, cursor: resolvedAddress && isValidAmount ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Continue
-            </button>
-          </div>
-        )}
-
-        {step === 'confirm' && (
-          <div style={{ 
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px', padding: '28px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '24px' }}>Confirm Transfer</h1>
-
-            <div style={{
-              background: 'var(--surface-raised)', border: '1px solid var(--border)',
-              borderRadius: '16px', padding: '24px', marginBottom: '24px', textAlign: 'center'
+          {step === 'confirm' && (
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '28px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
             }}>
-              <span style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-                {parseFloat(amount).toFixed(2)}
-              </span>
-              <span style={{ fontSize: '16px', color: 'var(--accent)', fontWeight: 800, marginLeft: '6px' }}>USDC</span>
+              <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '24px' }}>Confirm Payment</h1>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px', textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Recipient</span>
-                  <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{recipient}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>From</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <img src={CHAINS.find(c => c.id === sendFrom)?.icon} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain' }} alt="" />
-                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === sendFrom)?.name}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>To</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <img src={CHAINS.find(c => c.id === receiveOn)?.icon} style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'contain' }} alt="" />
-                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{CHAINS.find(c => c.id === receiveOn)?.name}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => setStep('form')}
-                style={{ flex: 1, background: 'transparent', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSend}
-                style={{ flex: 1, background: 'linear-gradient(135deg, #1035f6, #3b82f6)', border: 'none', borderRadius: '12px', padding: '14px', color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Confirm & Send
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 'cctp_progress' && (
-          <div style={{ 
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px', padding: '40px 28px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)', textAlign: 'center'
-          }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '32px' }}>
-              {sendFrom === receiveOn ? 'Processing Payment...' : 'Cross-Chain Transfer'}
-            </h1>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: cctpPhase === 'burning' ? 1 : 0.5 }}>
-                {cctpPhase === 'burning' ? <MdAccessTime size={24} className="shimmer-rotate" color="var(--accent)" /> : <MdCheckCircle size={24} color="var(--green)" />}
-                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                  1. {sendFrom === receiveOn ? 'Sending USDC' : 'Initiating Burn on Source Chain'}
-                </span>
-              </div>
-              
-              {sendFrom !== receiveOn && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: cctpPhase === 'attesting' ? 1 : cctpPhase === 'minting' ? 0.5 : 0.2 }}>
-                    {cctpPhase === 'attesting' ? <MdAccessTime size={24} className="shimmer-rotate" color="var(--accent)" /> : cctpPhase === 'minting' ? <MdCheckCircle size={24} color="var(--green)" /> : <div style={{width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--border)'}} />}
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                      2. Waiting for Circle Attestation
-                    </span>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: cctpPhase === 'minting' ? 1 : 0.2 }}>
-                    {cctpPhase === 'minting' ? <MdAccessTime size={24} className="shimmer-rotate" color="var(--accent)" /> : <div style={{width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--border)'}} />}
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                      3. Minting USDC on Destination Chain
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === 'success' && (
-          <div style={{ 
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px', padding: '40px 28px', textAlign: 'center',
-            boxShadow: '0 4px 30px rgba(0, 212, 168, 0.05)'
-          }}>
-            <div style={{ fontSize: '56px', marginBottom: '16px' }}>🎉</div>
-            <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--green)', marginBottom: '8px' }}>Payment Completed!</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>
-              You successfully sent {parseFloat(amount).toFixed(2)} USDC to {recipient} on {CHAINS.find(c => c.id === receiveOn)?.name}
-            </p>
-
-            <Link href="/" style={{ textDecoration: 'none' }}>
-              <button style={{
-                width: '100%', background: 'linear-gradient(135deg, #1035f6, #3b82f6)',
-                border: 'none', borderRadius: '12px', padding: '16px',
-                color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+              <div style={{
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                borderRadius: '16px', padding: '24px', marginBottom: '24px', textAlign: 'center'
               }}>
-                Return to Dashboard
-              </button>
-            </Link>
-          </div>
-        )}
+                <span style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  {parseFloat(amount).toFixed(2)}
+                </span>
+                <span style={{ fontSize: '16px', color: 'var(--accent)', fontWeight: 800, marginLeft: '6px' }}>USDC</span>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Recipient</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {recipient.startsWith('@') ? recipient : `${resolvedAddress?.slice(0, 8)}…${resolvedAddress?.slice(-6)}`}
+                    </span>
+                  </div>
+                  {memo && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Note</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic' }}>"{memo}"</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Network</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>Arc Testnet</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loader alerts */}
+              {phase === 'approving' && (
+                <div style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-accent)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--accent-bright)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <MdAccessTime size={14} className="shimmer-rotate" />
+                    <span>{waitingApprove ? 'Waiting for USDC spend limit approval...' : 'Approving USDC Router spend limit...'}</span>
+                  </p>
+                </div>
+              )}
+
+              {phase === 'sending' && (
+                <div style={{ background: 'rgba(0, 212, 168, 0.08)', border: '1px solid rgba(0, 212, 168, 0.2)', borderRadius: '12px', padding: '14px', marginBottom: '16px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--green)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <MdAccessTime size={14} className="shimmer-rotate" />
+                    <span>{waitingSend ? 'Confirming payment on Arc...' : 'Submitting payment transaction...'}</span>
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  disabled={phase !== 'idle'}
+                  onClick={() => setStep('form')}
+                  style={{
+                    flex: 1, background: 'transparent', border: '1px solid var(--border)',
+                    borderRadius: '12px', padding: '14px', color: 'var(--text-primary)',
+                    fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={phase !== 'idle'}
+                  onClick={handleSend}
+                  style={{
+                    flex: 1, background: 'linear-gradient(135deg, #1035f6, #3b82f6)', border: 'none',
+                    borderRadius: '12px', padding: '14px', color: 'white',
+                    fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(16, 53, 246, 0.25)',
+                  }}
+                >
+                  Confirm & Send
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'success' && (
+            <div style={{ 
+              background: 'var(--surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '24px', 
+              padding: '40px 28px', 
+              textAlign: 'center',
+              boxShadow: '0 4px 30px rgba(0, 212, 168, 0.05)'
+            }}>
+              <div style={{ fontSize: '56px', marginBottom: '16px' }}>🎉</div>
+              <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--green)', marginBottom: '8px' }}>Payment Sent!</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+                You successfully sent {parseFloat(amount).toFixed(2)} USDC to {recipient}
+              </p>
+
+              {sendTxHash && (
+                <a
+                  href={`${EXPLORER_URL}/tx/${sendTxHash}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'block', color: 'var(--accent)', fontSize: '13px', marginBottom: '32px', textDecoration: 'none', fontWeight: 700 }}
+                >
+                  View on ArcScan ↗
+                </a>
+              )}
+
+              <Link href="/" style={{ textDecoration: 'none' }}>
+                <button style={{
+                  width: '100%', background: 'linear-gradient(135deg, #1035f6, #3b82f6)',
+                  border: 'none', borderRadius: '12px', padding: '16px',
+                  color: 'white', fontSize: '15px', fontWeight: 800, cursor: 'pointer',
+                }}>
+                  Return to Dashboard
+                </button>
+              </Link>
+            </div>
+          )}
+        </NetworkGuard>
       </main>
     </PageLayout>
   )
@@ -412,7 +407,13 @@ function SendForm() {
 
 export default function SendPage() {
   return (
-    <Suspense fallback={<PageLayout><div style={{ textAlign: 'center', marginTop: '80px' }}>Loading...</div></PageLayout>}>
+    <Suspense fallback={
+      <PageLayout>
+        <div style={{ maxWidth: '480px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      </PageLayout>
+    }>
       <SendForm />
     </Suspense>
   )

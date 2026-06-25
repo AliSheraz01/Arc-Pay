@@ -22,13 +22,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', network: 'Arc Testnet' });
 });
 
-// Get user profile by username
-app.get('/api/users/:username', async (req, res) => {
+// Get user profile by address
+app.get('/api/users/:address', async (req, res) => {
   try {
-    const { username } = req.params;
-    const cleanUsername = username.replace('@', '').toLowerCase().trim();
+    const { address } = req.params;
     const user = await prisma.user.findUnique({
-      where: { username: cleanUsername }
+      where: { address: address.toLowerCase() }
     });
     
     if (!user) {
@@ -40,46 +39,15 @@ app.get('/api/users/:username', async (req, res) => {
   }
 });
 
-// Register or update user identity with multi-chain wallets
-app.post('/api/users/register', async (req, res) => {
-  try {
-    const { username, arcAddress, ethSepoliaAddress, baseSepoliaAddress, solanaAddress } = req.body;
-    
-    if (!username) {
-      return res.status(400).json({ error: 'username is required' });
-    }
-    
-    const cleanUsername = username.replace('@', '').toLowerCase().trim();
-    
-    const user = await prisma.user.upsert({
-      where: { username: cleanUsername },
-      update: { 
-        arcAddress: arcAddress ? arcAddress.toLowerCase() : null,
-        ethSepoliaAddress: ethSepoliaAddress ? ethSepoliaAddress.toLowerCase() : null,
-        baseSepoliaAddress: baseSepoliaAddress ? baseSepoliaAddress.toLowerCase() : null,
-        solanaAddress: solanaAddress || null
-      },
-      create: { 
-        username: cleanUsername,
-        arcAddress: arcAddress ? arcAddress.toLowerCase() : null,
-        ethSepoliaAddress: ethSepoliaAddress ? ethSepoliaAddress.toLowerCase() : null,
-        baseSepoliaAddress: baseSepoliaAddress ? baseSepoliaAddress.toLowerCase() : null,
-        solanaAddress: solanaAddress || null
-      }
-    });
-    
-    res.json(user);
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Resolve username to wallet maps
+// Resolve username to address
 app.get('/api/resolve/:username', async (req, res) => {
   try {
+    // Basic formatting: remove @ if present
     let { username } = req.params;
-    const cleanUsername = username.replace('@', '').toLowerCase().trim();
+    if (username.startsWith('@')) {
+      username = username.substring(1);
+    }
+    const cleanUsername = username.toLowerCase().trim();
     
     // 1. Try database lookup first
     const user = await prisma.user.findUnique({
@@ -87,48 +55,36 @@ app.get('/api/resolve/:username', async (req, res) => {
     });
     
     if (user) {
-      return res.json({ 
-        username: user.username,
-        wallets: {
-          arcTestnet: user.arcAddress,
-          ethSepolia: user.ethSepoliaAddress,
-          baseSepolia: user.baseSepoliaAddress,
-          solanaDevnet: user.solanaAddress
-        }
-      });
+      return res.json({ address: user.address });
     }
 
-    // 2. Fallback to querying the blockchain directly (Arc Testnet)
+    // 2. Fallback to querying the blockchain directly
     console.log(`[Resolve] Username @${cleanUsername} not in DB, querying blockchain...`);
     const resolvedAddress = await viemClient.readContract({
       address: REGISTRY_ADDRESS,
-      abi: [{
-        name: 'resolveUsername',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [{ name: '_username', type: 'string' }],
-        outputs: [{ name: '', type: 'address' }],
-      }] as const,
+      abi: [
+        {
+          name: 'resolveUsername',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: '_username', type: 'string' }],
+          outputs: [{ name: '', type: 'address' }],
+        }
+      ] as const,
       functionName: 'resolveUsername',
       args: [cleanUsername],
     });
 
+    // If resolved address is not the zero address, it's a valid username
     if (resolvedAddress && resolvedAddress !== '0x0000000000000000000000000000000000000000') {
       console.log(`[Resolve] Successfully resolved @${cleanUsername} to ${resolvedAddress} on-chain!`);
-      const createdUser = await prisma.user.upsert({
-        where: { username: cleanUsername },
-        update: { arcAddress: resolvedAddress.toLowerCase() },
-        create: { username: cleanUsername, arcAddress: resolvedAddress.toLowerCase() }
+      // Optionally upsert into DB so it's cached
+      await prisma.user.upsert({
+        where: { address: resolvedAddress.toLowerCase() },
+        update: { username: cleanUsername },
+        create: { address: resolvedAddress.toLowerCase(), username: cleanUsername }
       });
-      return res.json({ 
-        username: createdUser.username,
-        wallets: {
-          arcTestnet: createdUser.arcAddress,
-          ethSepolia: null,
-          baseSepolia: null,
-          solanaDevnet: null
-        }
-      });
+      return res.json({ address: resolvedAddress });
     }
     
     return res.status(404).json({ error: 'Username not found' });
@@ -319,9 +275,9 @@ async function indexUsernames(fromBlock: bigint, toBlock: bigint) {
         if (username && userAddress) {
           console.log(`[Indexer] Registry Sync: @${username} registered to ${userAddress} in tx ${transactionHash}`);
           await prisma.user.upsert({
-            where: { username },
-            update: { arcAddress: userAddress },
-            create: { arcAddress: userAddress, username }
+            where: { address: userAddress },
+            update: { username },
+            create: { address: userAddress, username }
           });
         }
       } catch (decodeErr) {

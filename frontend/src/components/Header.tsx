@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { FaucetModal } from '@/components/FaucetModal'
-import { ConnectWalletModal } from '@/components/ConnectWalletModal'
 import { useState, useEffect } from 'react'
 
 export function Header() {
@@ -69,7 +68,12 @@ export function Header() {
       {/* Right — Faucet + Wallet */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <FaucetModal />
-        <ConnectWalletModal />
+        <ConnectButton
+          accountStatus="address"
+          chainStatus="icon"
+          showBalance={false}
+          label="Connect Wallet"
+        />
       </div>
 
       <style jsx>{`

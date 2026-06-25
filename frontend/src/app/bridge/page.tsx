@@ -57,8 +57,8 @@ export default function BridgePage() {
       args: [
         parseUnits(amount, 6),
         getCctpDomain(destChainId), 
-        '0x000000000000000000000000' + address?.replace('0x', ''), 
-        USDC_ADDRESS
+        ('0x000000000000000000000000' + address?.replace('0x', '')) as `0x${string}`, 
+        USDC_ADDRESS as `0x${string}`
       ]
     })
   }

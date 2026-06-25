@@ -181,8 +181,8 @@ function SendPaymentTab() {
       args: [
         parseUnits(amount, 6),
         getCctpDomain(destChainId), // Map chainId to Circle Domain
-        '0x000000000000000000000000' + resolvedAddress.replace('0x', ''), // Pad to bytes32
-        USDC_ADDRESS
+        ('0x000000000000000000000000' + resolvedAddress.replace('0x', '')) as `0x${string}`, // Pad to bytes32
+        USDC_ADDRESS as `0x${string}`
       ]
     })
   }

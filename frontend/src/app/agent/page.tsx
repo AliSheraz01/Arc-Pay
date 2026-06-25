@@ -132,7 +132,7 @@ export default function AgentPage() {
 
     try {
       const amounts = recipients.map(r => parseUnits(r.amount, 6))
-      const totalUnits = amounts.reduce((acc, val) => acc + val, 0n)
+      const totalUnits = amounts.reduce((acc, val) => acc + val, BigInt(0))
       
       if (allowance === undefined || (allowance as bigint) < totalUnits) {
         // Need to approve

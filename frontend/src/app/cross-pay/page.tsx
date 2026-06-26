@@ -177,6 +177,7 @@ export default function CrossPayPage() {
           executeDeposit(targetAddress as `0x${string}`, parseUnits(amount, 6))
        }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfirmedApprove, bridgeStatus])
 
   // Update bridge status tracker based on Deposit status
@@ -347,11 +348,11 @@ export default function CrossPayPage() {
                 <div style={{ position: 'absolute', left: '11px', top: '12px', bottom: '12px', width: '2px', background: 'var(--surface-raised)', zIndex: 0 }}></div>
                 
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: (bridgeStatus !== 'idle' && bridgeStatus !== 'approving') ? 'var(--green)' : 'var(--surface-raised)', border: (bridgeStatus === 'approving') ? '2px solid var(--text-primary)' : '2px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
-                    {(bridgeStatus !== 'idle' && bridgeStatus !== 'approving') && <MdCheckCircle size={14} />}
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: (bridgeStatus !== 'approving') ? 'var(--green)' : 'var(--surface-raised)', border: (bridgeStatus === 'approving') ? '2px solid var(--text-primary)' : '2px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }}>
+                    {(bridgeStatus !== 'approving') && <MdCheckCircle size={14} />}
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: (bridgeStatus !== 'idle') ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Initialize & Approve</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>Initialize & Approve</div>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{bridgeStatus === 'approving' ? 'Pending wallet signature...' : 'Approved successfully'}</div>
                   </div>
                 </div>

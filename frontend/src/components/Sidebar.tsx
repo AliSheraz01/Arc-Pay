@@ -46,8 +46,7 @@ export function Sidebar() {
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
     ...(isCrossPayEnabled
       ? [
-          { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome },
-          { href: '/bridge', label: 'Bridge', icon: MdLink }
+          { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome }
         ]
       : [{ href: '/history', label: 'Transactions', icon: MdHistory }]
     ),

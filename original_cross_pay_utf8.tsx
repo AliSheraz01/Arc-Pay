@@ -1,15 +1,13 @@
-'use client'
+﻿'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { PageLayout } from '@/components/PageLayout'
 import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
 import Link from 'next/link'
-import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
-import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
-
-const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Example Sepolia USDC
+import { REGISTRY_ABI } from '@/lib/abi'
 
 export default function CrossPayPage() {
   const [activeTab, setActiveTab] = useState<'send' | 'history' | 'recovery'>('send')
@@ -96,7 +94,6 @@ export default function CrossPayPage() {
 function SendPaymentTab() {
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
-  const { address } = useAccount()
   const { chains } = useSwitchChain()
   const chainId = useChainId()
   const [destChainId, setDestChainId] = useState<number>(chains[0]?.id || 0)
@@ -105,25 +102,10 @@ function SendPaymentTab() {
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState('')
 
-  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'approving' | 'burning' | 'attesting' | 'minting' | 'complete'>('idle')
-
   const currentChain = chains.find(c => c.id === chainId)
 
-  // Contract calls
-  const { writeContractAsync: writeContractApprove, data: approveHash } = useWriteContract()
-  const { isLoading: isConfirmingApprove, isSuccess: isConfirmedApprove } = useWaitForTransactionReceipt({ hash: approveHash })
-
-  const { writeContractAsync: writeContractDeposit, data: depositHash, isPending: isPendingDeposit } = useWriteContract()
-  const { isLoading: isConfirmingDeposit, isSuccess: isConfirmedDeposit } = useWaitForTransactionReceipt({ hash: depositHash })
-
-  // Read allowance
-  const { data: allowance } = useReadContract({
-    address: USDC_ADDRESS as `0x${string}`,
-    abi: USDC_ABI,
-    functionName: 'allowance',
-    args: address ? [address, CCTP_TOKEN_MESSENGER] : undefined,
-    query: { enabled: !!address },
-  })
+  const { writeContract, data: hash, isPending } = useWriteContract()
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash })
 
   const resolveRecipient = useCallback(async (value: string) => {
     setResolveError('')
@@ -176,83 +158,34 @@ function SendPaymentTab() {
     }
   }, [])
 
-  const executeDeposit = async (targetAddr: `0x${string}`, parsedAmount: bigint) => {
-    try {
-      setBridgeStatus('burning')
-      await writeContractDeposit({
-        address: CCTP_TOKEN_MESSENGER,
-        abi: [{
-          "inputs": [
-            { "internalType": "uint256", "name": "amount", "type": "uint256" },
-            { "internalType": "uint32", "name": "destinationDomain", "type": "uint32" },
-            { "internalType": "bytes32", "name": "mintRecipient", "type": "bytes32" },
-            { "internalType": "address", "name": "burnToken", "type": "address" }
-          ],
-          "name": "depositForBurn",
-          "outputs": [{ "internalType": "uint64", "name": "nonce", "type": "uint64" }],
-          "stateMutability": "nonpayable",
-          "type": "function"
-        }],
-        functionName: 'depositForBurn',
-        args: [
-          parsedAmount,
-          getCctpDomain(destChainId), // Map chainId to Circle Domain
-          ('0x000000000000000000000000' + targetAddr.replace('0x', '')) as `0x${string}`, // Pad to bytes32
-          USDC_ADDRESS as `0x${string}`
-        ]
-      })
-    } catch (e) {
-      console.error("Deposit failed", e)
-      setBridgeStatus('idle')
-    }
-  }
-
   const handleSendCrossChain = async () => {
-    if (!amount || (!resolvedAddress && !address && !recipient)) return
+    if (!amount || !resolvedAddress) return
     
-    const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
-    if (!targetAddress) return
-    
-    const parsedAmount = parseUnits(amount, 6)
-    
-    try {
-      // Check Allowance and Approve if needed
-      if (allowance === undefined || (allowance as bigint) < parsedAmount) {
-        setBridgeStatus('approving')
-        await writeContractApprove({
-          address: USDC_ADDRESS as `0x${string}`,
-          abi: USDC_ABI,
-          functionName: 'approve',
-          args: [CCTP_TOKEN_MESSENGER, parsedAmount]
-        })
-        // wait for useEffect to catch isConfirmedApprove
-      } else {
-        executeDeposit(targetAddress as `0x${string}`, parsedAmount)
-      }
-    } catch (e) {
-       console.error("Approval failed", e)
-       setBridgeStatus('idle')
-    }
+    const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Example Sepolia USDC
+
+    writeContract({
+      address: CCTP_TOKEN_MESSENGER,
+      abi: [{
+        "inputs": [
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "uint32", "name": "destinationDomain", "type": "uint32" },
+          { "internalType": "bytes32", "name": "mintRecipient", "type": "bytes32" },
+          { "internalType": "address", "name": "burnToken", "type": "address" }
+        ],
+        "name": "depositForBurn",
+        "outputs": [{ "internalType": "uint64", "name": "nonce", "type": "uint64" }],
+        "stateMutability": "nonpayable",
+        "type": "function"
+      }],
+      functionName: 'depositForBurn',
+      args: [
+        parseUnits(amount, 6),
+        getCctpDomain(destChainId), // Map chainId to Circle Domain
+        ('0x000000000000000000000000' + resolvedAddress.replace('0x', '')) as `0x${string}`, // Pad to bytes32
+        USDC_ADDRESS as `0x${string}`
+      ]
+    })
   }
-
-  // Handle Approve Confirmation
-  useEffect(() => {
-    if (isConfirmedApprove && bridgeStatus === 'approving') {
-       // Proceed to deposit
-       const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
-       if (targetAddress && amount) {
-          executeDeposit(targetAddress as `0x${string}`, parseUnits(amount, 6))
-       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfirmedApprove, bridgeStatus])
-
-  // Update bridge status tracker based on Deposit status
-  useEffect(() => {
-    if (isPendingDeposit) setBridgeStatus('burning')
-    else if (isConfirmingDeposit) setBridgeStatus('attesting')
-    else if (isConfirmedDeposit) setBridgeStatus('complete')
-  }, [isPendingDeposit, isConfirmingDeposit, isConfirmedDeposit])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -311,41 +244,17 @@ function SendPaymentTab() {
 
       <button 
         onClick={handleSendCrossChain}
-        disabled={bridgeStatus !== 'idle'}
+        disabled={isPending || isConfirming}
         style={{
-          width: '100%', padding: '18px', background: bridgeStatus !== 'idle' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus !== 'idle' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus !== 'idle' ? 'none' : '0 4px 16px rgba(16, 53, 246, 0.3)', transition: 'all 0.2s'
+          width: '100%', padding: '18px', background: (isPending || isConfirming) ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: (isPending || isConfirming) ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: (isPending || isConfirming) ? 'none' : '0 4px 16px rgba(16, 53, 246, 0.3)', transition: 'all 0.2s'
         }}
       >
-        {bridgeStatus === 'idle' && 'Send Cross-Chain Payment'}
-        {bridgeStatus === 'approving' && 'Approving USDC in wallet...'}
-        {bridgeStatus === 'burning' && 'Confirming Deposit...'}
-        {bridgeStatus === 'attesting' && 'Processing transaction...'}
-        {bridgeStatus === 'minting' && 'Minting USDC...'}
-        {bridgeStatus === 'complete' && 'Payment Sent!'}
+        {isPending ? 'Confirm in Wallet...' : isConfirming ? 'Processing Transaction...' : 'Send Cross-Chain Payment'}
       </button>
 
-      {/* Confirmation at bottom of wallet UI */}
-      {bridgeStatus === 'complete' && (
-        <div style={{ padding: '16px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-          <MdCheckCircle size={20} /> Transaction successful! TX: {depositHash?.slice(0,10)}...
-        </div>
-      )}
-      {bridgeStatus === 'approving' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--text-secondary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Waiting for approval...
-        </div>
-      )}
-      {bridgeStatus === 'burning' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--text-secondary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Please confirm the cross-chain deposit in your wallet...
-        </div>
-      )}
-      {(bridgeStatus === 'attesting' || bridgeStatus === 'minting') && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Processing cross-chain transfer (may take a few minutes)...
+      {isConfirmed && (
+        <div style={{ padding: '12px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', textAlign: 'center', fontWeight: 700 }}>
+          Transaction successful! TX: {hash?.slice(0,10)}...
         </div>
       )}
     </div>
@@ -376,7 +285,7 @@ function HistoryTab() {
       </div>
 
       <div style={{ textAlign: 'center', padding: '60px 0', border: '1px dashed var(--border)', borderRadius: '16px' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>⏱️</div>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>≡ƒô¡</div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px', fontWeight: 600 }}>No {filter.toLowerCase()} transactions found</p>
       </div>
     </div>
@@ -389,19 +298,16 @@ function RecoveryEngineTab() {
       <div style={{ padding: '24px', background: 'rgba(225, 29, 46, 0.1)', border: '1px solid rgba(225, 29, 46, 0.3)', borderRadius: '16px', marginBottom: '24px', textAlign: 'center' }}>
         <MdHealing size={32} color="#E11D2E" style={{ marginBottom: '12px' }} />
         <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#E11D2E', marginBottom: '8px' }}>Arc Recovery Engine</h3>
-        <p style={{ color: '#E11D2E', fontSize: '13px', opacity: 0.8 }}>Automatically recovers funds from failed or stuck cross-chain transactions.</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, maxWidth: '400px', margin: '0 auto' }}>
+          Automatically scans for incomplete CCTP transfers, burned funds, or cross-chain failures. Claim or retry stuck payments securely.
+        </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ padding: '20px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>Tx #99824</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Stuck during attestation</div>
-          </div>
-          <button style={{ padding: '8px 16px', background: '#E11D2E', color: 'white', border: 'none', borderRadius: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-            Recover 500 USDC
-          </button>
-        </div>
+      <div style={{ textAlign: 'center', padding: '40px 0', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)' }}>
+        <div style={{ width: '48px', height: '48px', border: '3px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
+        <style jsx>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+        <p style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>Scanning for stuck funds...</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Powered by Easyzpay Recovery Engine</p>
       </div>
     </div>
   )

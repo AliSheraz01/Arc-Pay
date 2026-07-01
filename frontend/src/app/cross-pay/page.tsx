@@ -6,7 +6,7 @@ import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
 import { ChevronDown, RefreshCw, ArrowUpDown, Check, Wallet, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
 import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
@@ -586,6 +586,7 @@ function SendPaymentTab() {
   const { address } = useAccount()
   const activeChainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
+  const publicClient = usePublicClient()
 
   const [fromChain, setFromChain] = useState(CHAINS[1]); // Ethereum Sepolia
   const [toChain, setToChain] = useState(CHAINS[0]); // Arc Testnet
@@ -740,32 +741,33 @@ function SendPaymentTab() {
       // Check Allowance and Approve if needed
       if (allowance === undefined || (allowance as bigint) < parsedAmount) {
         setBridgeStatus('approving')
-        await writeContractApprove({
+        const txHash = await writeContractApprove({
           address: contracts.usdc,
           abi: USDC_ABI,
           functionName: 'approve',
           args: [contracts.messenger, parsedAmount]
         })
-      } else {
-        await executeDeposit(targetAddress as `0x${string}`, parsedAmount)
+
+        // Wait for transaction to be mined/confirmed
+        if (publicClient) {
+          try {
+            await publicClient.waitForTransactionReceipt({ hash: txHash })
+          } catch (receiptErr) {
+            console.warn("Failed to get transaction receipt, proceeding with fallback delay:", receiptErr)
+            await new Promise(resolve => setTimeout(resolve, 4000))
+          }
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 4000))
+        }
       }
+      
+      // Proceed directly to execute the deposit
+      await executeDeposit(targetAddress as `0x${string}`, parsedAmount)
     } catch (e) {
-       console.error("Approval failed", e)
+       console.error("Transaction failed", e)
        setBridgeStatus('idle')
     }
   }
-
-  // Handle Approve Confirmation
-  useEffect(() => {
-    if (isConfirmedApprove && bridgeStatus === 'approving') {
-       const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
-       if (targetAddress && amount) {
-          const contracts = getCctpContracts(fromChain.chainIdDec)
-          executeDeposit(targetAddress as `0x${string}`, parseUnits(amount, contracts.decimals))
-       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConfirmedApprove, bridgeStatus])
 
   // Update bridge status tracker based on Deposit status
   useEffect(() => {

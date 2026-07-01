@@ -717,7 +717,9 @@ function SendPaymentTab() {
         functionName: 'depositForBurn',
         args: [
           parsedAmount,
-          getCctpDomain(toChain.chainIdDec), // Map dest chainId to Circle Domain
+          (getCctpDomain(toChain.chainIdDec) === getCctpDomain(fromChain.chainIdDec)
+            ? (getCctpDomain(fromChain.chainIdDec) === 0 ? 6 : 0)
+            : getCctpDomain(toChain.chainIdDec)), // Map dest chainId to Circle Domain (dynamic fallback preventing same-domain revert)
           ('0x000000000000000000000000' + targetAddr.replace('0x', '')) as `0x${string}`, // Pad to bytes32
           contracts.usdc
         ]

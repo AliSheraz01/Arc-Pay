@@ -1,71 +1,14 @@
 'use client'
 
-import '@rainbow-me/rainbowkit/styles.css'
-import { RainbowKitProvider, darkTheme, lightTheme, connectorsForWallets } from '@rainbow-me/rainbowkit'
-import {
-  metaMaskWallet,
-  coinbaseWallet,
-  walletConnectWallet,
-  rabbyWallet,
-  trustWallet,
-} from '@rainbow-me/rainbowkit/wallets'
-import { WagmiProvider, createConfig, createStorage, http } from 'wagmi'
+import React from 'react'
+import { PrivyProvider } from '@privy-io/react-auth'
+import { WagmiProvider, createConfig } from '@privy-io/wagmi'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
+import { http } from 'wagmi'
 import { arcTestnet, sonicTestnet, monadTestnet, unichainSepolia, inkTestnet } from '@/lib/constants'
 import { sepolia, arbitrumSepolia, baseSepolia, lineaSepolia, optimismSepolia } from 'wagmi/chains'
-import React from 'react'
 
-// ── Safe localStorage wrapper
-const safeStorage = createStorage({
-  storage: {
-    getItem: (key: string) => {
-      try {
-        return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null
-      } catch {
-        return null
-      }
-    },
-    setItem: (key: string, value: string) => {
-      try {
-        if (typeof window !== 'undefined') window.localStorage.setItem(key, value)
-      } catch { /* ignore */ }
-    },
-    removeItem: (key: string) => {
-      try {
-        if (typeof window !== 'undefined') window.localStorage.removeItem(key)
-      } catch { /* ignore */ }
-    },
-  },
-})
-
-const PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? ''
-
-// ── Define wallet list — MetaMask / injected first so it works without WalletConnect
-const connectors = connectorsForWallets(
-  [
-    {
-      groupName: 'Recommended',
-      wallets: [
-        metaMaskWallet as any,
-        rabbyWallet as any,
-        coinbaseWallet as any,
-        trustWallet as any,
-      ],
-    },
-    ...(PROJECT_ID
-      ? [{
-          groupName: 'More',
-          wallets: [walletConnectWallet as any],
-        }]
-      : []),
-  ],
-  {
-    appName: 'EasyZpay',
-    projectId: PROJECT_ID || 'easyzpay_demo',
-  }
-)
-
-// ── Wagmi config with explicit connectors (no getDefaultConfig)
+// ── 1. Create Wagmi Configuration using Privy's wrapper
 const config = createConfig({
   chains: [
     arcTestnet, 
@@ -79,7 +22,6 @@ const config = createConfig({
     unichainSepolia, 
     inkTestnet
   ],
-  connectors,
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
     [sepolia.id]: http(),
@@ -93,25 +35,22 @@ const config = createConfig({
     [inkTestnet.id]: http(),
   },
   ssr: false,
-  storage: safeStorage,
 })
 
-// ── QueryClient
+// ── 2. Create TanStack Query Client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      throwOnError: false,
       staleTime: 4_000,
     },
     mutations: {
       retry: false,
-      throwOnError: false,
     },
   },
 })
 
-// ── Error boundary
+// ── Error boundary (non-fatal errors wrapper)
 class WalletErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean }
@@ -126,16 +65,10 @@ class WalletErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
-    if (
-      error.message.includes('not found') ||
-      error.message.includes('connector') ||
-      error.message.includes('MetaMask') ||
-      error.message.includes('WalletConnect') ||
-      error.message.includes('session')
-    ) {
-      console.warn('[EasyZpay] Wallet connector error (non-fatal):', error.message)
+    if (error.message.includes('connector') || error.message.includes('session')) {
+      console.warn('[EasyZpay] Privy/Wagmi wallet connector warning (non-fatal):', error.message)
     } else {
-      console.error('[EasyZpay] Unexpected error:', error)
+      console.error('[EasyZpay] Unexpected provider error:', error)
     }
   }
 
@@ -165,34 +98,32 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect()
   }, [])
 
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || ''
+
   return (
     <WalletErrorBoundary>
-      <WagmiProvider config={config} reconnectOnMount={true}>
+      <PrivyProvider
+        appId={appId}
+        config={{
+          loginMethods: ['google', 'wallet', 'email'],
+          appearance: {
+            theme: activeTheme,
+            accentColor: '#1035f6', // Match our royal blue accent
+            showWalletLoginFirst: false,
+          },
+          embeddedWallets: {
+            ethereum: {
+              createOnLogin: 'users-without-wallets',
+            },
+          },
+        }}
+      >
         <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider
-            theme={
-              activeTheme === 'dark'
-                ? darkTheme({
-                    accentColor: '#1035f6', // Match our royal blue accent
-                    accentColorForeground: 'white',
-                    borderRadius: 'large',
-                    fontStack: 'system',
-                    overlayBlur: 'small',
-                  })
-                : lightTheme({
-                    accentColor: '#1035f6', // Match our royal blue accent
-                    accentColorForeground: 'white',
-                    borderRadius: 'large',
-                    fontStack: 'system',
-                    overlayBlur: 'small',
-                  })
-            }
-            locale="en-US"
-          >
+          <WagmiProvider config={config} reconnectOnMount={true}>
             {children}
-          </RainbowKitProvider>
+          </WagmiProvider>
         </QueryClientProvider>
-      </WagmiProvider>
+      </PrivyProvider>
     </WalletErrorBoundary>
   )
 }

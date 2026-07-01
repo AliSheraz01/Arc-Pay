@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Sidebar } from './Sidebar'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { LoginButton } from './LoginButton'
 import { FaucetModal } from './FaucetModal'
 
 interface PageLayoutProps {
@@ -44,12 +44,7 @@ export function PageLayout({ children }: PageLayoutProps) {
           {/* Right section - Faucet + Connect Wallet */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <FaucetModal />
-            <ConnectButton
-              accountStatus="address"
-              chainStatus="icon"
-              showBalance={false}
-              label="Connect Wallet"
-            />
+            <LoginButton />
           </div>
         </header>
 

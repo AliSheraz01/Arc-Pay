@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { LoginButton } from './LoginButton'
 import { FaucetModal } from '@/components/FaucetModal'
 import { useState, useEffect } from 'react'
 
@@ -67,12 +67,7 @@ export function Header() {
       {/* Right — Faucet + Wallet */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <FaucetModal />
-        <ConnectButton
-          accountStatus="address"
-          chainStatus="full"
-          showBalance={false}
-          label="Connect Wallet"
-        />
+        <LoginButton />
       </div>
 
       <style jsx>{`

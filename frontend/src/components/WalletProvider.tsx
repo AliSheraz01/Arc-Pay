@@ -121,6 +121,19 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       <PrivyProvider
         appId={appId}
         config={{
+          defaultChain: arcTestnet,
+          supportedChains: [
+            arcTestnet, 
+            sepolia, 
+            arbitrumSepolia, 
+            baseSepolia, 
+            lineaSepolia, 
+            optimismSepolia, 
+            sonicTestnet, 
+            monadTestnet, 
+            unichainSepolia, 
+            inkTestnet
+          ],
           loginMethods: ['google', 'wallet', 'email'],
           appearance: {
             theme: activeTheme,

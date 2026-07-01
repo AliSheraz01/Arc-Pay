@@ -1,9 +1,22 @@
 'use client'
 
 import { usePrivy } from '@privy-io/react-auth'
+import { useAccount, useReadContract } from 'wagmi'
+import { REGISTRY_ADDRESS } from '@/lib/constants'
+import { REGISTRY_ABI } from '@/lib/abi'
 
 export function LoginButton() {
   const { login, logout, ready, authenticated, user } = usePrivy()
+  const { address } = useAccount()
+
+  // Read current username registered to address
+  const { data: myUsername } = useReadContract({
+    address: REGISTRY_ADDRESS,
+    abi: REGISTRY_ABI,
+    functionName: 'getMyUsername',
+    account: address,
+    query: { enabled: !!address },
+  })
 
   if (!ready) {
     return (
@@ -26,11 +39,19 @@ export function LoginButton() {
   }
 
   if (authenticated) {
+    // 1. Google Gmail address takes priority
+    // 2. Fallback to registered on-chain username
+    // 3. Fallback to standard email OTP
+    // 4. Fallback to active wallet address
+    const gmail = user?.google?.email
+    const hasUsername = myUsername && (myUsername as string).length > 0
+
     const displayName = 
-      user?.google?.email || 
+      gmail || 
+      (hasUsername ? `@${myUsername}` : null) || 
       user?.email?.address || 
-      (user?.wallet?.address 
-        ? `${user.wallet.address.slice(0, 6)}...${user.wallet.address.slice(-4)}`
+      (address 
+        ? `${address.slice(0, 6)}...${address.slice(-4)}`
         : 'Connected')
 
     return (

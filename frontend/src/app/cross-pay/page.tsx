@@ -1,15 +1,504 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { PageLayout } from '@/components/PageLayout'
+import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
+import { ChevronDown, RefreshCw, ArrowUpDown, Check, Wallet, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
 import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
 
-const USDC_ADDRESS = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' // Example Sepolia USDC
+// ---- Real chain configs (verified chain IDs / public RPCs / explorers) ----
+const CHAINS = [
+  {
+    id: "arc",
+    name: "Arc Testnet",
+    color: "#6b5bff",
+    chainIdDec: 5042002,
+    rpcUrl: "https://rpc.testnet.arc.network",
+    explorer: "https://testnet.arcscan.app",
+    nativeSymbol: "USDC",
+    decimals: 18,
+  },
+  {
+    id: "eth",
+    name: "Ethereum Sepolia",
+    color: "#8fa3c9",
+    chainIdDec: 11155111,
+    rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+    explorer: "https://sepolia.etherscan.io",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "arb",
+    name: "Arbitrum Sepolia",
+    color: "#28a0f0",
+    chainIdDec: 421614,
+    rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
+    explorer: "https://sepolia.arbiscan.io",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "base",
+    name: "Base Sepolia",
+    color: "#0052ff",
+    chainIdDec: 84532,
+    rpcUrl: "https://sepolia.base.org",
+    explorer: "https://sepolia.basescan.org",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "ink",
+    name: "Ink Testnet",
+    color: "#9b5bd6",
+    chainIdDec: 763373,
+    rpcUrl: "https://rpc-gel-sepolia.inkonchain.com",
+    explorer: "https://explorer-sepolia.inkonchain.com",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "linea",
+    name: "Linea Sepolia",
+    color: "#61dfff",
+    chainIdDec: 59141,
+    rpcUrl: "https://rpc.sepolia.linea.build",
+    explorer: "https://sepolia.lineascan.build",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "monad",
+    name: "Monad Testnet",
+    color: "#8a5cf6",
+    chainIdDec: 10143,
+    rpcUrl: "https://testnet-rpc.monad.xyz",
+    explorer: "https://testnet.monadexplorer.com",
+    nativeSymbol: "MONAD",
+    decimals: 18,
+  },
+  {
+    id: "sonic",
+    name: "Sonic Testnet",
+    color: "#ff5b5b",
+    chainIdDec: 57054,
+    rpcUrl: "https://rpc.testnet.soniclabs.com",
+    explorer: "https://testnet.sonicscan.org",
+    nativeSymbol: "S",
+    decimals: 18,
+  },
+  {
+    id: "unichain",
+    name: "Unichain Sepolia",
+    color: "#ff66cc",
+    chainIdDec: 1301,
+    rpcUrl: "https://sepolia.unichain.org",
+    explorer: "https://sepolia.uniscan.xyz",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  },
+  {
+    id: "op",
+    name: "Optimism Sepolia",
+    color: "#ff3e3e",
+    chainIdDec: 11155420,
+    rpcUrl: "https://sepolia.optimism.io",
+    explorer: "https://sepolia-optimism.etherscan.io",
+    nativeSymbol: "ETH",
+    decimals: 18,
+  }
+];
+
+// CCTP USDC & Messenger configs per Chain ID
+const CCTP_CONFIGS: Record<number, { usdc: `0x${string}`, messenger: `0x${string}`, decimals: number }> = {
+  11155111: { // Ethereum Sepolia
+    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    messenger: CCTP_TOKEN_MESSENGER,
+    decimals: 6
+  },
+  421614: { // Arbitrum Sepolia
+    usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+    messenger: '0x127156157f13C07f6c3D02319c59508821034c4C',
+    decimals: 6
+  },
+  84532: { // Base Sepolia
+    usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    messenger: '0x1682ae6375C4E8A7D564BC4930e159937D76e654',
+    decimals: 6
+  },
+  5042002: { // Arc Testnet
+    usdc: '0x3600000000000000000000000000000000000000',
+    messenger: '0x0000000000000000000000000000000000000000',
+    decimals: 18
+  }
+};
+
+function getCctpContracts(chainId: number) {
+  const cfg = CCTP_CONFIGS[chainId]
+  if (cfg) return cfg
+  return {
+    usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as `0x${string}`,
+    messenger: CCTP_TOKEN_MESSENGER,
+    decimals: 6
+  }
+}
+
+// ---- helpers ----
+function hexToBigInt(hex: string) {
+  try {
+    return BigInt(hex);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+function formatUnits(raw: bigint, decimals: number, maxFrac = 4) {
+  const neg = raw < BigInt(0);
+  const v = neg ? -raw : raw;
+  const base = BigInt(10) ** BigInt(decimals);
+  const whole = v / base;
+  const frac = v % base;
+  let fracStr = frac.toString().padStart(decimals, "0").slice(0, maxFrac);
+  fracStr = fracStr.replace(/0+$/, "");
+  const out = fracStr.length ? `${whole}.${fracStr}` : `${whole}`;
+  return (neg ? "-" : "") + out;
+}
+
+async function rpcCall(rpcUrl: string, method: string, params: any[]) {
+  const res = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message || "RPC error");
+  return json.result;
+}
+
+async function fetchNativeBalance(chain: typeof CHAINS[0], address: string) {
+  const result = await rpcCall(chain.rpcUrl, "eth_getBalance", [address, "latest"]);
+  return hexToBigInt(result);
+}
+
+async function fetchUsdcBalance(chain: typeof CHAINS[0], address: string) {
+  try {
+    const contracts = getCctpContracts(chain.chainIdDec);
+    const data = `0x70a08231000000000000000000000000` + address.replace('0x', '').toLowerCase();
+    const result = await rpcCall(chain.rpcUrl, "eth_call", [
+      { to: contracts.usdc, data },
+      "latest"
+    ]);
+    return hexToBigInt(result);
+  } catch {
+    return fetchNativeBalance(chain, address);
+  }
+}
+
+// ---- Network logo marks ----
+function NetworkMark({ id, size }: { id: string, size: number }) {
+  const s = size;
+  switch (id) {
+    case "eth":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <polygon points="12,2 19,12.2 12,16 5,12.2" fill="#c1c9e8" opacity="0.9" />
+          <polygon points="12,2 19,12.2 12,9.2" fill="#8fa3c9" />
+          <polygon points="12,17.2 19,13.4 12,22 5,13.4" fill="#c1c9e8" opacity="0.9" />
+          <polygon points="12,17.2 19,13.4 12,22" fill="#8fa3c9" />
+        </svg>
+      );
+    case "arb":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="11" fill="#213147" />
+          <path d="M8 16.5 L11.3 7 L13 7 L9.7 16.5 Z" fill="#28a0f0" />
+          <path d="M12.7 16.5 L16 7 L17.7 7 L14.4 16.5 Z" fill="#fff" />
+          <path d="M6.5 16.5 H17.8 L17 18.2 H7.3 Z" fill="#28a0f0" />
+        </svg>
+      );
+    case "base":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="11" fill="#0052ff" />
+          <rect x="6.4" y="10.6" width="11.2" height="2.8" fill="#fff" />
+        </svg>
+      );
+    case "ink":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <defs>
+            <linearGradient id="inkGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#7c3aed" />
+              <stop offset="100%" stopColor="#c084fc" />
+            </linearGradient>
+          </defs>
+          <path d="M12 2.5 C15.5 8 18.5 11 18.5 14.5 C18.5 18.6 15.6 21.5 12 21.5 C8.4 21.5 5.5 18.6 5.5 14.5 C5.5 11 8.5 8 12 2.5 Z" fill="url(#inkGrad)" />
+        </svg>
+      );
+    case "linea":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#000" />
+          <path d="M8 6 V15.5 H16" stroke="#61dfff" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "monad":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <polygon points="12,2 20.5,7 20.5,17 12,22 3.5,17 3.5,7" fill="#8a5cf6" />
+          <polygon points="12,6 16.5,8.7 16.5,15.3 12,18 7.5,15.3 7.5,8.7" fill="#0a0b0e" opacity="0.35" />
+        </svg>
+      );
+    case "sonic":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="11" fill="#ff5b5b" />
+          <path d="M7 14 L12 7 L17 14 H14 L12 11 L10 14 Z" fill="#fff" />
+        </svg>
+      );
+    case "unichain":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="11" fill="#ff66cc" />
+          <circle cx="12" cy="12" r="5" fill="#fff" />
+        </svg>
+      );
+    case "op":
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="11" fill="#ff3e3e" />
+          <path d="M8 12 C8 9.5 9.5 8 12 8 C14.5 8 16 9.5 16 12 C16 14.5 14.5 16 12 16 C9.5 16 8 14.5 8 12 Z" stroke="#fff" strokeWidth="2.5" />
+        </svg>
+      );
+    case "arc":
+    default:
+      return (
+        <svg width={s} height={s} viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="11" fill="#1a1730" />
+          <path d="M4.5 15.5 A9 9 0 0 1 19.5 15.5" stroke="#6b5bff" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          <circle cx="12" cy="15.6" r="2" fill="#a99bff" />
+        </svg>
+      );
+  }
+}
+
+function ChainIcon({ chain, size = 22 }: { chain: typeof CHAINS[0], size?: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        minWidth: size,
+        borderRadius: "50%",
+        overflow: "hidden",
+        background: "rgba(255,255,255,0.06)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <NetworkMark id={chain.id} size={size} />
+    </span>
+  );
+}
+
+interface ChainSelectProps {
+  value: typeof CHAINS[0]
+  onChange: (chain: typeof CHAINS[0]) => void
+  disabledId: string
+}
+
+function ChainSelect({ value, onChange, disabledId }: ChainSelectProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          padding: "12px 14px",
+          cursor: "pointer",
+          color: "var(--text-primary)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <ChainIcon chain={value} />
+          <span style={{ fontSize: 14.5, fontWeight: 700 }}>{value.name}</span>
+        </span>
+        <ChevronDown
+          size={16}
+          color="var(--text-secondary)"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 150ms ease" }}
+        />
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+            zIndex: 100,
+            maxHeight: 240,
+            overflowY: "auto",
+            padding: 6,
+          }}
+        >
+          {CHAINS.map((c) => {
+            const selected = c.id === value.id;
+            const disabled = c.id === disabledId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  onChange(c);
+                  setOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "9px 10px",
+                  borderRadius: 8,
+                  background: selected ? "rgba(255,255,255,0.05)" : "transparent",
+                  border: "none",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.35 : 1,
+                  textAlign: "left",
+                }}
+                onMouseEnter={(e) => {
+                  if (!disabled) e.currentTarget.style.background = "rgba(255,255,255,0.07)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = selected ? "rgba(255,255,255,0.05)" : "transparent";
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <ChainIcon chain={c} size={20} />
+                  <span style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: selected ? 700 : 500 }}>{c.name}</span>
+                </span>
+                {selected && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--green)", fontWeight: 600 }}>
+                    <Check size={13} /> Selected
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PanelProps {
+  label: string
+  chain: typeof CHAINS[0]
+  onChainChange: (chain: typeof CHAINS[0]) => void
+  disabledId: string
+  amount: string
+  onAmountChange?: (val: string) => void
+  readOnly?: boolean
+  balanceMap: Record<string, string>
+  loadingBalances: boolean
+  onMax?: () => void
+}
+
+function Panel({
+  label,
+  chain,
+  onChainChange,
+  disabledId,
+  amount,
+  onAmountChange,
+  readOnly,
+  balanceMap,
+  loadingBalances,
+  onMax,
+}: PanelProps) {
+  const bal = balanceMap[chain.id];
+  const balanceText = loadingBalances && bal === undefined ? "…" : bal !== undefined ? bal : "0.00";
+
+  return (
+    <div style={{ background: "var(--surface-raised)", border: "1px solid var(--border)", borderRadius: 16, padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)", fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 12.5, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+          USDC Balance: {balanceText}
+          {!readOnly && onMax && (
+            <button
+              type="button"
+              onClick={onMax}
+              style={{ fontSize: 11, fontWeight: 900, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            >
+              MAX
+            </button>
+          )}
+        </span>
+      </div>
+
+      <ChainSelect value={chain} onChange={onChainChange} disabledId={disabledId} />
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border)",
+            borderRadius: 20,
+            padding: "6px 12px 6px 8px",
+          }}
+        >
+          <ChainIcon chain={chain} size={22} />
+          <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>USDC</span>
+        </span>
+        <input
+          value={amount}
+          readOnly={readOnly}
+          onChange={(e) => onAmountChange && onAmountChange(e.target.value.replace(/[^0-9.]/g, ""))}
+          placeholder="0.00"
+          style={{ background: "transparent", border: "none", outline: "none", textAlign: "right", fontSize: 26, fontWeight: 800, color: "var(--text-primary)", width: "50%" }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function CrossPayPage() {
   const [activeTab, setActiveTab] = useState<'send' | 'history' | 'recovery'>('send')
@@ -32,84 +521,89 @@ export default function CrossPayPage() {
           <MdArrowBack size={20} /> Back to Dashboard
         </Link>
 
-          <div style={{ 
-            background: 'var(--surface)', 
-            border: '1px solid var(--border)', 
-            borderRadius: '24px', 
-            padding: '28px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
-          }}>
-            <h1 style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>Cross Pay</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '28px' }}>Send USDC across any supported testnet instantly.</p>
+        <div style={{ 
+          background: 'var(--surface)', 
+          border: '1px solid var(--border)', 
+          borderRadius: '24px', 
+          padding: '28px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
+        }}>
+          <h1 style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.02em' }}>Cross Pay</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '28px' }}>Send USDC across any supported testnet instantly.</p>
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', background: 'var(--surface-raised)', padding: '6px', borderRadius: '16px' }}>
-              <button
-                onClick={() => setActiveTab('send')}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: activeTab === 'send' ? 'var(--accent)' : 'transparent',
-                  color: activeTab === 'send' ? '#fff' : 'var(--text-secondary)',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.2s'
-                }}
-              >
-                <MdSend size={18} /> Send
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: activeTab === 'history' ? 'var(--accent)' : 'transparent',
-                  color: activeTab === 'history' ? '#fff' : 'var(--text-secondary)',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.2s'
-                }}
-              >
-                <MdHistory size={18} /> History
-              </button>
-              <button
-                onClick={() => setActiveTab('recovery')}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: activeTab === 'recovery' ? 'var(--accent)' : 'transparent',
-                  color: activeTab === 'recovery' ? '#fff' : 'var(--text-secondary)',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.2s'
-                }}
-              >
-                <MdHealing size={18} /> Recovery
-              </button>
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === 'send' && <SendPaymentTab />}
-            {activeTab === 'history' && <HistoryTab />}
-            {activeTab === 'recovery' && <RecoveryEngineTab />}
-
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', background: 'var(--surface-raised)', padding: '6px', borderRadius: '16px' }}>
+            <button
+              onClick={() => setActiveTab('send')}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                background: activeTab === 'send' ? 'var(--accent)' : 'transparent',
+                color: activeTab === 'send' ? '#fff' : 'var(--text-secondary)',
+                border: 'none', cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              <MdSend size={18} /> Send
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                background: activeTab === 'history' ? 'var(--accent)' : 'transparent',
+                color: activeTab === 'history' ? '#fff' : 'var(--text-secondary)',
+                border: 'none', cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              <MdHistory size={18} /> History
+            </button>
+            <button
+              onClick={() => setActiveTab('recovery')}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '12px', fontSize: '14px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                background: activeTab === 'recovery' ? 'var(--accent)' : 'transparent',
+                color: activeTab === 'recovery' ? '#fff' : 'var(--text-secondary)',
+                border: 'none', cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              <MdHealing size={18} /> Recovery
+            </button>
           </div>
+
+          {/* Tab Content */}
+          {activeTab === 'send' && <SendPaymentTab />}
+          {activeTab === 'history' && <HistoryTab />}
+          {activeTab === 'recovery' && <RecoveryEngineTab />}
+
+        </div>
       </main>
     </PageLayout>
   )
 }
 
 function SendPaymentTab() {
-  const [recipient, setRecipient] = useState('')
-  const [amount, setAmount] = useState('')
   const { address } = useAccount()
-  const { chains } = useSwitchChain()
-  const chainId = useChainId()
-  const [destChainId, setDestChainId] = useState<number>(chains[0]?.id || 0)
-  
+  const activeChainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+
+  const [fromChain, setFromChain] = useState(CHAINS[1]); // Ethereum Sepolia
+  const [toChain, setToChain] = useState(CHAINS[0]); // Arc Testnet
+  const [amount, setAmount] = useState("");
+  const [recipient, setRecipient] = useState("");
+
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState('')
 
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'approving' | 'burning' | 'attesting' | 'minting' | 'complete'>('idle')
+  const [balanceMap, setBalanceMap] = useState<Record<string, string>>({})
+  const [loadingBalances, setLoadingBalances] = useState(false)
+  const [spinning, setSpinning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const currentChain = chains.find(c => c.id === chainId)
-
-  // Contract calls
+  // Contract calls configurations
+  const currentCctp = getCctpContracts(fromChain.chainIdDec)
   const { writeContractAsync: writeContractApprove, data: approveHash } = useWriteContract()
   const { isLoading: isConfirmingApprove, isSuccess: isConfirmedApprove } = useWaitForTransactionReceipt({ hash: approveHash })
 
@@ -118,12 +612,37 @@ function SendPaymentTab() {
 
   // Read allowance
   const { data: allowance } = useReadContract({
-    address: USDC_ADDRESS as `0x${string}`,
+    address: currentCctp.usdc,
     abi: USDC_ABI,
     functionName: 'allowance',
-    args: address ? [address, CCTP_TOKEN_MESSENGER] : undefined,
-    query: { enabled: !!address },
+    args: address ? [address, currentCctp.messenger] : undefined,
+    query: { enabled: !!address && activeChainId === fromChain.chainIdDec },
   })
+
+  const loadAllBalances = useCallback(async (addr: string) => {
+    if (!addr) return;
+    setLoadingBalances(true);
+    const entries = await Promise.all(
+      CHAINS.map(async (c) => {
+        try {
+          const contracts = getCctpContracts(c.chainIdDec);
+          const raw = await fetchUsdcBalance(c, addr);
+          return [c.id, formatUnits(raw, contracts.decimals, 4)];
+        } catch {
+          return [c.id, "—"];
+        }
+      })
+    );
+    setBalanceMap(Object.fromEntries(entries));
+    setLoadingBalances(false);
+  }, []);
+
+  // Reload balances when wallet, fromChain, or transaction state changes
+  useEffect(() => {
+    if (address) {
+      loadAllBalances(address)
+    }
+  }, [address, fromChain, bridgeStatus, loadAllBalances])
 
   const resolveRecipient = useCallback(async (value: string) => {
     setResolveError('')
@@ -179,8 +698,9 @@ function SendPaymentTab() {
   const executeDeposit = async (targetAddr: `0x${string}`, parsedAmount: bigint) => {
     try {
       setBridgeStatus('burning')
+      const contracts = getCctpContracts(fromChain.chainIdDec)
       await writeContractDeposit({
-        address: CCTP_TOKEN_MESSENGER,
+        address: contracts.messenger,
         abi: [{
           "inputs": [
             { "internalType": "uint256", "name": "amount", "type": "uint256" },
@@ -196,9 +716,9 @@ function SendPaymentTab() {
         functionName: 'depositForBurn',
         args: [
           parsedAmount,
-          getCctpDomain(destChainId), // Map chainId to Circle Domain
+          getCctpDomain(toChain.chainIdDec), // Map dest chainId to Circle Domain
           ('0x000000000000000000000000' + targetAddr.replace('0x', '')) as `0x${string}`, // Pad to bytes32
-          USDC_ADDRESS as `0x${string}`
+          contracts.usdc
         ]
       })
     } catch (e) {
@@ -213,21 +733,21 @@ function SendPaymentTab() {
     const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
     if (!targetAddress) return
     
-    const parsedAmount = parseUnits(amount, 6)
+    const contracts = getCctpContracts(fromChain.chainIdDec)
+    const parsedAmount = parseUnits(amount, contracts.decimals)
     
     try {
       // Check Allowance and Approve if needed
       if (allowance === undefined || (allowance as bigint) < parsedAmount) {
         setBridgeStatus('approving')
         await writeContractApprove({
-          address: USDC_ADDRESS as `0x${string}`,
+          address: contracts.usdc,
           abi: USDC_ABI,
           functionName: 'approve',
-          args: [CCTP_TOKEN_MESSENGER, parsedAmount]
+          args: [contracts.messenger, parsedAmount]
         })
-        // wait for useEffect to catch isConfirmedApprove
       } else {
-        executeDeposit(targetAddress as `0x${string}`, parsedAmount)
+        await executeDeposit(targetAddress as `0x${string}`, parsedAmount)
       }
     } catch (e) {
        console.error("Approval failed", e)
@@ -238,10 +758,10 @@ function SendPaymentTab() {
   // Handle Approve Confirmation
   useEffect(() => {
     if (isConfirmedApprove && bridgeStatus === 'approving') {
-       // Proceed to deposit
        const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
        if (targetAddress && amount) {
-          executeDeposit(targetAddress as `0x${string}`, parseUnits(amount, 6))
+          const contracts = getCctpContracts(fromChain.chainIdDec)
+          executeDeposit(targetAddress as `0x${string}`, parseUnits(amount, contracts.decimals))
        }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,40 +774,99 @@ function SendPaymentTab() {
     else if (isConfirmedDeposit) setBridgeStatus('complete')
   }, [isPendingDeposit, isConfirmingDeposit, isConfirmedDeposit])
 
+  const handleFromChainChange = async (c: typeof CHAINS[0]) => {
+    setFromChain(c)
+    setError(null)
+    if (switchChainAsync) {
+      try {
+        await switchChainAsync({ chainId: c.chainIdDec })
+      } catch (err: any) {
+        setError(err?.message || `Failed to switch to ${c.name}`)
+      }
+    }
+  }
+
+  const refresh = () => {
+    setSpinning(true)
+    if (address) loadAllBalances(address)
+    setTimeout(() => setSpinning(false), 500)
+  }
+
+  const swapDirection = () => {
+    const temp = fromChain
+    setFromChain(toChain)
+    setToChain(temp)
+    if (switchChainAsync) {
+      switchChainAsync({ chainId: toChain.chainIdDec }).catch(console.error)
+    }
+  }
+
+  const handleMax = () => {
+    const bal = balanceMap[fromChain.id]
+    if (bal && bal !== "—") setAmount(bal)
+  }
+
+  const walletOnCorrectChain = activeChainId === fromChain.chainIdDec
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'flex', gap: '16px' }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Source Chain</label>
-          <div style={{ padding: '14px', background: 'var(--surface-raised)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>
-            {currentChain?.name || 'Unknown'} (Current)
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Destination Chain</label>
-          <select 
-            value={destChainId}
-            onChange={e => setDestChainId(Number(e.target.value))}
-            style={{ width: '100%', padding: '14px', background: 'var(--surface-raised)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600, outline: 'none' }}
-          >
-            {chains.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }}>Select Bridge Path</span>
+        <button
+          type="button"
+          onClick={refresh}
+          aria-label="Refresh Balances"
+          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+        >
+          <RefreshCw size={13} color="var(--text-secondary)" style={{ animation: spinning ? "spin 0.5s linear" : "none" }} />
+        </button>
       </div>
+
+      <Panel
+        label="From (Source Chain)"
+        chain={fromChain}
+        onChainChange={handleFromChainChange}
+        disabledId={toChain.id}
+        amount={amount}
+        onAmountChange={setAmount}
+        balanceMap={balanceMap}
+        loadingBalances={loadingBalances}
+        onMax={handleMax}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '-10px 0' }}>
+        <button
+          type="button"
+          onClick={swapDirection}
+          aria-label="Swap direction"
+          style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 2, position: "relative" }}
+        >
+          <ArrowUpDown size={15} color="var(--text-secondary)" />
+        </button>
+      </div>
+
+      <Panel
+        label="To (Destination Chain)"
+        chain={toChain}
+        onChainChange={setToChain}
+        disabledId={fromChain.id}
+        amount={amount}
+        readOnly
+        balanceMap={balanceMap}
+        loadingBalances={loadingBalances}
+      />
 
       <div>
         <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Recipient (@username or Address)</label>
         <input 
           type="text" 
-          placeholder="@alisheraz0ev or 0x..." 
+          placeholder="@alisheraz0ev or 0x... (Default: Your own address)" 
           value={recipient}
           onChange={e => {
             setRecipient(e.target.value)
             resolveRecipient(e.target.value)
           }}
-          style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '16px', outline: 'none' }}
+          style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', outline: 'none' }}
         />
         {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving username...</div>}
         {resolveError && <div style={{ fontSize: '12px', color: '#ff4466', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdErrorOutline /> {resolveError}</div>}
@@ -298,33 +877,40 @@ function SendPaymentTab() {
         )}
       </div>
 
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Amount (USDC)</label>
-        <input 
-          type="number" 
-          placeholder="0.00" 
-          value={amount}
-          onChange={e => setAmount(e.target.value)}
-          style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '24px', fontWeight: 800, outline: 'none' }}
-        />
-      </div>
+      {error && (
+        <div style={{ fontSize: 12, color: "#ff6b6b", background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 8, padding: "8px 10px" }}>
+          {error}
+        </div>
+      )}
 
-      <button 
-        onClick={handleSendCrossChain}
-        disabled={bridgeStatus !== 'idle'}
-        style={{
-          width: '100%', padding: '18px', background: bridgeStatus !== 'idle' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus !== 'idle' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus !== 'idle' ? 'none' : '0 4px 16px rgba(16, 53, 246, 0.3)', transition: 'all 0.2s'
-        }}
-      >
-        {bridgeStatus === 'idle' && 'Send Cross-Chain Payment'}
-        {bridgeStatus === 'approving' && 'Approving USDC in wallet...'}
-        {bridgeStatus === 'burning' && 'Confirming Deposit...'}
-        {bridgeStatus === 'attesting' && 'Processing transaction...'}
-        {bridgeStatus === 'minting' && 'Minting USDC...'}
-        {bridgeStatus === 'complete' && 'Payment Sent!'}
-      </button>
+      {!walletOnCorrectChain ? (
+        <button
+          type="button"
+          onClick={() => switchChainAsync && switchChainAsync({ chainId: fromChain.chainIdDec })}
+          style={{
+            width: '100%', padding: '18px', background: 'var(--yellow)', color: 'black', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', marginTop: '12px', transition: 'all 0.2s'
+          }}
+        >
+          Switch Wallet to {fromChain.name}
+        </button>
+      ) : (
+        <button 
+          onClick={handleSendCrossChain}
+          disabled={bridgeStatus !== 'idle'}
+          style={{
+            width: '100%', padding: '18px', background: bridgeStatus !== 'idle' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus !== 'idle' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus !== 'idle' ? 'none' : '0 4px 16px var(--accent-glow)', transition: 'all 0.2s'
+          }}
+        >
+          {bridgeStatus === 'idle' && 'Send Cross-Chain Payment'}
+          {bridgeStatus === 'approving' && 'Approving USDC in wallet...'}
+          {bridgeStatus === 'burning' && 'Confirming Deposit...'}
+          {bridgeStatus === 'attesting' && 'Processing transaction...'}
+          {bridgeStatus === 'minting' && 'Minting USDC...'}
+          {bridgeStatus === 'complete' && 'Payment Sent!'}
+        </button>
+      )}
 
-      {/* Confirmation at bottom of wallet UI */}
+      {/* Confirmation statuses */}
       {bridgeStatus === 'complete' && (
         <div style={{ padding: '16px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
           <MdCheckCircle size={20} /> Transaction successful! TX: {depositHash?.slice(0,10)}...
@@ -332,20 +918,17 @@ function SendPaymentTab() {
       )}
       {bridgeStatus === 'approving' && (
         <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--text-secondary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Waiting for approval...
+          <Loader2 size={16} className="animate-spin" color="var(--text-secondary)" /> Waiting for approval...
         </div>
       )}
       {bridgeStatus === 'burning' && (
         <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--text-secondary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Please confirm the cross-chain deposit in your wallet...
+          <Loader2 size={16} className="animate-spin" color="var(--text-secondary)" /> Please confirm the cross-chain deposit in your wallet...
         </div>
       )}
       {(bridgeStatus === 'attesting' || bridgeStatus === 'minting') && (
         <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-          <div className="spinner" style={{ width: 16, height: 16, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} /> Processing cross-chain transfer (may take a few minutes)...
+          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Processing cross-chain transfer (may take a few minutes)...
         </div>
       )}
     </div>
@@ -393,7 +976,7 @@ function RecoveryEngineTab() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ padding: '20px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '20px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyIntersection: 'space-between' } as any}>
           <div>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>Tx #99824</div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Stuck during attestation</div>

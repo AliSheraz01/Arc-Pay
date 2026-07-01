@@ -1,8 +1,8 @@
 'use client'
 
 import React from 'react'
-import { PrivyProvider } from '@privy-io/react-auth'
-import { WagmiProvider, createConfig } from '@privy-io/wagmi'
+import { PrivyProvider, useWallets } from '@privy-io/react-auth'
+import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { http } from 'wagmi'
 import { arcTestnet, sonicTestnet, monadTestnet, unichainSepolia, inkTestnet } from '@/lib/constants'
@@ -77,6 +77,22 @@ class WalletErrorBoundary extends React.Component<
   }
 }
 
+function PrivyWagmiSync({ children }: { children: React.ReactNode }) {
+  const { wallets } = useWallets()
+  const { setActiveWallet } = useSetActiveWallet()
+
+  React.useEffect(() => {
+    if (wallets.length > 0) {
+      const active = wallets.find((w) => w.walletClientType === 'privy') || wallets[0]
+      setActiveWallet(active).catch((err) => {
+        console.warn('[Sync] Failed to set active wallet:', err)
+      })
+    }
+  }, [wallets, setActiveWallet])
+
+  return <>{children}</>
+}
+
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [activeTheme, setActiveTheme] = React.useState<'dark' | 'light'>('light')
 
@@ -120,7 +136,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       >
         <QueryClientProvider client={queryClient}>
           <WagmiProvider config={config} reconnectOnMount={true}>
-            {children}
+            <PrivyWagmiSync>
+              {children}
+            </PrivyWagmiSync>
           </WagmiProvider>
         </QueryClientProvider>
       </PrivyProvider>

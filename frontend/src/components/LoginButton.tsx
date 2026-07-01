@@ -26,10 +26,12 @@ export function LoginButton() {
   }
 
   if (authenticated) {
-    // Show email if logged in via Google, or truncated wallet address otherwise
-    const displayName = user?.google?.email || (user?.wallet?.address 
-      ? `${user.wallet.address.slice(0, 6)}...${user.wallet.address.slice(-4)}`
-      : 'Connected')
+    const displayName = 
+      user?.google?.email || 
+      user?.email?.address || 
+      (user?.wallet?.address 
+        ? `${user.wallet.address.slice(0, 6)}...${user.wallet.address.slice(-4)}`
+        : 'Connected')
 
     return (
       <button 

@@ -3,22 +3,7 @@
 import Link from 'next/link'
 import { LoginButton } from './LoginButton'
 import { FaucetModal } from '@/components/FaucetModal'
-import { useState, useEffect } from 'react'
-
 export function Header() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('light')
-
-  useEffect(() => {
-    const checkTheme = () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme') as 'dark' | 'light' | null
-      setTheme(currentTheme ?? 'light')
-    }
-    checkTheme()
-
-    const observer = new MutationObserver(checkTheme)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observer.disconnect()
-  }, [])
 
   return (
     <header style={{

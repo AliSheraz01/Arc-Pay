@@ -98,7 +98,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect()
   }, [])
 
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || ''
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'cmr26gea9004r0ci8prz0sph5'
 
   return (
     <WalletErrorBoundary>

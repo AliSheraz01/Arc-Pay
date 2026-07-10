@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import { createClient } from '@libsql/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import dotenv from 'dotenv';
-import { createPublicClient, http, decodeFunctionData } from 'viem';
+import { createPublicClient, http, decodeFunctionData, isAddress } from 'viem';
 
 dotenv.config();
 
@@ -16,10 +15,9 @@ const dbUrl = process.env.DATABASE_URL && process.env.DATABASE_URL !== 'undefine
 
 console.log(`[Database] Initializing connection to: ${dbUrl}`);
 
-const libsql = createClient({
+const adapter = new PrismaLibSql({
   url: dbUrl,
 });
-const adapter = new PrismaLibSql(libsql as any);
 const prisma = new PrismaClient({ adapter });
 const PORT = process.env.PORT || 3001;
 
@@ -323,24 +321,73 @@ app.get('/api/payouts/schedule/:address', async (req, res) => {
 app.post('/api/payouts/schedule', async (req, res) => {
   try {
     const { name, description, frequency, recipients, totalAmount, nextRun, ownerAddress } = req.body;
-    if (!name || !frequency || !recipients || !totalAmount || !ownerAddress) {
-      return res.status(400).json({ error: 'name, frequency, recipients, totalAmount, and ownerAddress are required' });
+    
+    // Server-side validation
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Payout name is required.' });
     }
+    if (!frequency) {
+      return res.status(400).json({ error: 'Frequency is required.' });
+    }
+    if (!nextRun) {
+      return res.status(400).json({ error: 'Scheduled date is required.' });
+    }
+    if (!totalAmount || isNaN(parseFloat(totalAmount)) || parseFloat(totalAmount) <= 0) {
+      return res.status(400).json({ error: 'Total USDC amount must be greater than 0.' });
+    }
+    if (!ownerAddress || !isAddress(ownerAddress)) {
+      return res.status(400).json({ error: 'A valid connected owner address is required.' });
+    }
+    if (!recipients) {
+      return res.status(400).json({ error: 'Recipients list is required.' });
+    }
+
+    let parsedRecipients: any[] = [];
+    try {
+      parsedRecipients = typeof recipients === 'string' ? JSON.parse(recipients) : recipients;
+    } catch (e) {
+      return res.status(400).json({ error: 'Recipients list is not formatted as a valid JSON array.' });
+    }
+
+    if (!Array.isArray(parsedRecipients) || parsedRecipients.length === 0) {
+      return res.status(400).json({ error: 'At least one recipient is required.' });
+    }
+
+    for (let i = 0; i < parsedRecipients.length; i++) {
+      const r = parsedRecipients[i];
+      const rowNum = i + 1;
+      const addr = r.address ? r.address.trim() : '';
+      if (!addr) {
+        return res.status(400).json({ error: `Row ${rowNum}: Wallet address or username is required.` });
+      }
+      if (!isAddress(addr) && !addr.startsWith('@')) {
+        return res.status(400).json({ error: `Row ${rowNum}: "${addr}" is not a valid EVM address or username.` });
+      }
+      const amt = parseFloat(r.amount);
+      if (isNaN(amt) || amt <= 0) {
+        return res.status(400).json({ error: `Row ${rowNum}: Amount "${r.amount}" must be a positive number.` });
+      }
+    }
+
+    console.log(`[Scheduled Payout] Creating schedule "${name}" for owner ${ownerAddress}`);
+
     const schedule = await prisma.scheduledPayout.create({
       data: {
-        name,
-        description,
+        name: name.trim(),
+        description: description ? description.trim() : null,
         frequency,
         recipients: typeof recipients === 'string' ? recipients : JSON.stringify(recipients),
         totalAmount: totalAmount.toString(),
         nextRun: new Date(nextRun),
+        status: 'Scheduled', // Save scheduled payouts in the database with status of "Scheduled"
         ownerAddress: ownerAddress.toLowerCase()
       }
     });
-    res.json(schedule);
-  } catch (error) {
-    console.error('Create schedule error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+
+    return res.status(200).json({ success: true, schedule });
+  } catch (error: any) {
+    console.error('Create schedule server-side error details:', error); // Log detailed server error
+    return res.status(500).json({ error: 'Internal server error. Failed to create scheduled payout.' }); // User-friendly error message
   }
 });
 

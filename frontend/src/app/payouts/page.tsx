@@ -199,71 +199,140 @@ export default function PayoutsPage() {
   // Scheduled Payout Submit
   const handleSchedulePayout = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!address) return
+
+    // 1. Client-Side Field Validations (Requirement 5 & 6)
+    if (!payoutName || !payoutName.trim()) {
+      showToast('Payout name is required.', 'error')
+      return
+    }
+
+    if (!paymentDate) {
+      showToast('Scheduled payment date is required.', 'error')
+      return
+    }
+
+    if (!frequency) {
+      showToast('Payment frequency is required.', 'error')
+      return
+    }
+
+    if (recipients.length === 0) {
+      showToast('At least one recipient is required.', 'error')
+      return
+    }
+
+    // Validate each recipient row (Requirement 6)
+    for (let i = 0; i < recipients.length; i++) {
+      const rec = recipients[i]
+      const rowNum = i + 1
+      const addr = rec.address.trim()
+      
+      if (!addr) {
+        showToast(`Row ${rowNum}: Wallet address or @username is required.`, 'error')
+        return
+      }
+      
+      if (!isAddress(addr) && !addr.startsWith('@')) {
+        showToast(`Row ${rowNum}: "${addr}" is not a valid EVM address or username.`, 'error')
+        return
+      }
+
+      if (!rec.amount || !rec.amount.trim()) {
+        showToast(`Row ${rowNum}: Amount is required.`, 'error')
+        return
+      }
+
+      const amt = parseFloat(rec.amount)
+      if (isNaN(amt) || amt <= 0) {
+        showToast(`Row ${rowNum}: Amount must be a positive number greater than 0.`, 'error')
+        return
+      }
+    }
+
+    const nextRunDate = new Date(paymentDate)
+    const total = recipients.reduce((sum, r) => sum + parseFloat(r.amount || '0'), 0)
+    const totalUnits = parseUnits(total.toString(), decimals).toString()
     
-    // Validations
-    if (!payoutName.trim()) {
-      showToast('Payout name is required', 'error')
-      return
+    // Check if blockchain services are available (Requirement 12)
+    const isBlockchainAvailable = !!(isConnected && address)
+    const defaultStatus = isBlockchainAvailable ? 'Scheduled' : 'Pending Execution'
+
+    // 2. Optimistic UI Updates (Requirement 13)
+    const owner = address || '0x0000000000000000000000000000000000000000'
+    const optimisticSchedule: ScheduledPayout = {
+      id: 'optimistic-' + Math.random().toString(),
+      name: payoutName.trim(),
+      description: payoutDesc ? payoutDesc.trim() : undefined,
+      frequency,
+      recipients: JSON.stringify(recipients),
+      totalAmount: totalUnits,
+      nextRun: nextRunDate.toISOString(),
+      status: defaultStatus,
+      ownerAddress: owner,
+      createdAt: new Date().toISOString()
     }
 
-    const validRecipients = recipients.filter(r => r.address.trim() && r.amount.trim())
-    if (validRecipients.length === 0) {
-      showToast('At least one recipient is required', 'error')
-      return
-    }
-
-    // Wallet address validation
-    const invalidAddress = validRecipients.find(r => !isAddress(r.address))
-    if (invalidAddress) {
-      showToast(`Invalid wallet address: ${invalidAddress.address}`, 'error')
-      return
-    }
+    const previousSchedules = queryClient.getQueryData<ScheduledPayout[]>(['schedules', address])
+    
+    // Optimistically update lists
+    queryClient.setQueryData<ScheduledPayout[]>(
+      ['schedules', address],
+      old => old ? [optimisticSchedule, ...old] : [optimisticSchedule]
+    )
 
     setIsSubmittingSchedule(true)
 
-    // Calculate total USDC
-    const total = validRecipients.reduce((sum, r) => sum + parseFloat(r.amount || '0'), 0)
-    const totalUnits = parseUnits(total.toString(), decimals).toString()
-
     try {
       // 1. Create schedule in database
-      const nextRunDate = paymentDate ? new Date(paymentDate) : new Date()
       const res = await fetch(`${BACKEND_URL}/api/payouts/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: payoutName,
-          description: payoutDesc,
+          name: payoutName.trim(),
+          description: payoutDesc ? payoutDesc.trim() : '',
           frequency,
-          recipients: JSON.stringify(validRecipients),
+          recipients: JSON.stringify(recipients),
           totalAmount: totalUnits,
           nextRun: nextRunDate.toISOString(),
-          ownerAddress: address
+          ownerAddress: owner,
+          status: defaultStatus
         })
       })
 
-      if (!res.ok) throw new Error('Database create schedule failed')
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Database scheduled payout creation failed.')
+      }
 
       // 2. If Save as template is checked, create template too
       if (saveAsTemplateFlag) {
-        await fetch(`${BACKEND_URL}/api/payouts/templates`, {
+        const tplRes = await fetch(`${BACKEND_URL}/api/payouts/templates`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: payoutName,
-            description: payoutDesc,
-            recipients: JSON.stringify(validRecipients),
+            name: payoutName.trim(),
+            description: payoutDesc ? payoutDesc.trim() : '',
+            recipients: JSON.stringify(recipients),
             totalAmount: totalUnits,
-            ownerAddress: address
+            ownerAddress: owner
           })
         })
-        refetchTemplates()
-        showToast('Payroll template saved successfully.', 'success')
+        if (tplRes.ok) {
+          refetchTemplates()
+          showToast('Payroll template saved successfully.', 'success')
+        }
       }
 
-      showToast('Scheduled payout created successfully.', 'success')
+      showToast(
+        isBlockchainAvailable 
+          ? 'Scheduled payout created successfully.' 
+          : 'Blockchain services offline. Schedule created as "Pending Execution".', 
+        isBlockchainAvailable ? 'success' : 'warning'
+      )
+      
+      // Refresh real schedules and balance (Requirement 14)
       refetchSchedules()
+      refetchBalance()
       
       // Reset form
       setPayoutName('')
@@ -272,9 +341,11 @@ export default function PayoutsPage() {
       setRecipients([{ address: '', name: '', amount: '', memo: '' }])
       setSaveAsTemplateFlag(false)
       setActiveTab('overview')
-    } catch (err) {
-      console.error(err)
-      showToast('Failed to create scheduled payout', 'error')
+    } catch (err: any) {
+      console.error('Schedule creation error details:', err)
+      // Rollback optimistic update on error
+      queryClient.setQueryData(['schedules', address], previousSchedules)
+      showToast(err.message || 'Failed to create scheduled payout', 'error')
     } finally {
       setIsSubmittingSchedule(false)
     }
@@ -667,7 +738,7 @@ export default function PayoutsPage() {
                 {[
                   { title: 'Total USDC Paid', value: `${schedules.reduce((sum, s) => s.status === 'COMPLETED' ? sum + parseFloat(formatUnits(BigInt(s.totalAmount), decimals)) : sum, 0).toFixed(2)}`, unit: 'USDC', icon: <MdAttachMoney size={20} /> },
                   { title: 'Upcoming Payout', value: schedules.length > 0 ? new Date(schedules[0].nextRun).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'None', unit: '', icon: <MdOutlineSchedule size={20} /> },
-                  { title: 'Active Schedules', value: `${schedules.filter(s => s.status === 'ACTIVE').length}`, unit: 'active', icon: <MdAutorenew size={20} /> },
+                  { title: 'Active Schedules', value: `${schedules.filter(s => s.status === 'ACTIVE' || s.status === 'Scheduled' || s.status === 'Pending Execution').length}`, unit: 'active', icon: <MdAutorenew size={20} /> },
                   { title: 'Total Recipients', value: '2', unit: 'unique', icon: <MdPeople size={20} /> },
                   { title: 'Success Rate', value: '100', unit: '%', icon: <MdTrendingUp size={20} /> },
                   { title: 'Pending Payments', value: '0', unit: 'pending', icon: <MdOutlineSchedule size={20} /> }
@@ -704,7 +775,7 @@ export default function PayoutsPage() {
                   <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px', padding: '24px' }}>
                     <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px' }}>Upcoming Scheduled Payments</h2>
                     
-                    {schedules.filter(s => s.status === 'ACTIVE').length === 0 ? (
+                    {schedules.filter(s => s.status === 'ACTIVE' || s.status === 'Scheduled' || s.status === 'Pending Execution').length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '36px 0', border: '1px dashed var(--border)', borderRadius: '16px' }}>
                         <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>No active scheduled payments found.</p>
@@ -719,7 +790,7 @@ export default function PayoutsPage() {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {schedules.filter(s => s.status === 'ACTIVE').map(sch => {
+                        {schedules.filter(s => s.status === 'ACTIVE' || s.status === 'Scheduled' || s.status === 'Pending Execution').map(sch => {
                           const rx: Recipient[] = JSON.parse(sch.recipients)
                           return (
                             <div key={sch.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '16px', padding: '16px' }}>

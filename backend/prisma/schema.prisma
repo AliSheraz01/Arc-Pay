@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model User {
@@ -60,4 +60,30 @@ model RecoveryRequest {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model PayoutTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  recipients   String   // JSON string representing Recipient[]: { address: string, name?: string, amount: string }
+  totalAmount  String   // Total USDC in 6-decimal format (string)
+  ownerAddress String   // User who created the template
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ScheduledPayout {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  frequency    String   // MONTHLY, WEEKLY, ONE_TIME
+  recipients   String   // JSON string representing Recipient[]: { address: string, name?: string, amount: string }
+  totalAmount  String   // Total USDC in 6-decimal format (string)
+  nextRun      DateTime
+  status       String   @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED
+  ownerAddress String   // User who created the schedule
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 

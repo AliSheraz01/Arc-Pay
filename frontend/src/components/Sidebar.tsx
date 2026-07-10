@@ -40,18 +40,38 @@ export function Sidebar() {
 
   const isCrossPayEnabled = process.env.NEXT_PUBLIC_ENABLE_CROSS_PAY === 'true'
 
+  // Custom premium geometric Payouts icon (monoline SVG)
+  const PayoutsIcon = ({ size = 18 }: { size?: number }) => (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3a9 9 0 0 0-9 9M12 21a9 9 0 0 0 9-9" />
+      <path d="M21 12a9 9 0 0 0-9-9M3 12a9 9 0 0 0 9 9" />
+      <path d="M16 3h5v5M8 21H3v-5" />
+      <line x1="12" y1="3" x2="12" y2="9" />
+      <line x1="12" y1="15" x2="12" y2="21" />
+      <line x1="3" y1="12" x2="9" y2="12" />
+      <line x1="15" y1="12" x2="21" y2="12" />
+    </svg>
+  )
+
   const navItems = [
     { href: '/', label: 'Home', icon: MdHome },
     { href: '/send', label: 'Send', icon: MdSend },
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
-    ...(isCrossPayEnabled
-      ? [
-          { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome }
-        ]
-      : [{ href: '/history', label: 'Transactions', icon: MdHistory }]
-    ),
-    { href: '/profile', label: 'Profile', icon: MdPerson },
+    { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome },
+    { href: '/payouts', label: 'Payouts', icon: PayoutsIcon },
     { href: '/receive?tab=request', label: 'Payment Links', icon: MdLink },
+    { href: '/activity', label: 'Activity', icon: MdHistory },
+    { href: '/profile', label: 'Profile', icon: MdPerson },
     { href: '/agent', label: 'AI Pay', icon: MdAutoAwesome },
     { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
@@ -281,7 +301,7 @@ export function Sidebar() {
 
       {/* Mobile Tab Bottom Navigation */}
       <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
-        {navItems.slice(0, 4).concat(navItems.slice(-2)).map(item => {
+        {navItems.filter(item => ['Home', 'Send', 'Receive', 'Payouts', 'Activity', 'Settings'].includes(item.label)).map(item => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (

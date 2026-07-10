@@ -217,6 +217,162 @@ app.get('/api/requests/:address', async (req, res) => {
   }
 });
 
+// ==========================================
+// Payout Templates Routes
+// ==========================================
+
+// Get all templates for an address
+app.get('/api/payouts/templates/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const templates = await prisma.payoutTemplate.findMany({
+      where: { ownerAddress: address.toLowerCase() },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(templates);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new template
+app.post('/api/payouts/templates', async (req, res) => {
+  try {
+    const { name, description, recipients, totalAmount, ownerAddress } = req.body;
+    if (!name || !ownerAddress || !recipients) {
+      return res.status(400).json({ error: 'name, ownerAddress, and recipients are required' });
+    }
+    const template = await prisma.payoutTemplate.create({
+      data: {
+        name,
+        description,
+        recipients: typeof recipients === 'string' ? recipients : JSON.stringify(recipients),
+        totalAmount: totalAmount.toString(),
+        ownerAddress: ownerAddress.toLowerCase()
+      }
+    });
+    res.json(template);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update an existing template
+app.put('/api/payouts/templates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, recipients, totalAmount } = req.body;
+    const updated = await prisma.payoutTemplate.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        recipients: typeof recipients === 'string' ? recipients : JSON.stringify(recipients),
+        totalAmount: totalAmount ? totalAmount.toString() : undefined
+      }
+    });
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a template
+app.delete('/api/payouts/templates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.payoutTemplate.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==========================================
+// Scheduled Payouts Routes
+// ==========================================
+
+// Get all schedules for an address
+app.get('/api/payouts/schedule/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const schedules = await prisma.scheduledPayout.findMany({
+      where: { ownerAddress: address.toLowerCase() },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(schedules);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a scheduled payout
+app.post('/api/payouts/schedule', async (req, res) => {
+  try {
+    const { name, description, frequency, recipients, totalAmount, nextRun, ownerAddress } = req.body;
+    if (!name || !frequency || !recipients || !totalAmount || !ownerAddress) {
+      return res.status(400).json({ error: 'name, frequency, recipients, totalAmount, and ownerAddress are required' });
+    }
+    const schedule = await prisma.scheduledPayout.create({
+      data: {
+        name,
+        description,
+        frequency,
+        recipients: typeof recipients === 'string' ? recipients : JSON.stringify(recipients),
+        totalAmount: totalAmount.toString(),
+        nextRun: new Date(nextRun),
+        ownerAddress: ownerAddress.toLowerCase()
+      }
+    });
+    res.json(schedule);
+  } catch (error) {
+    console.error('Create schedule error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a scheduled payout
+app.delete('/api/payouts/schedule/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.scheduledPayout.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Mark a schedule as executed (runs next execution calculation)
+app.post('/api/payouts/schedule/:id/run', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schedule = await prisma.scheduledPayout.findUnique({ where: { id } });
+    if (!schedule) {
+      return res.status(404).json({ error: 'Schedule not found' });
+    }
+    
+    let nextRun = new Date(schedule.nextRun);
+    let status = 'ACTIVE';
+    
+    if (schedule.frequency === 'WEEKLY') {
+      nextRun.setDate(nextRun.getDate() + 7);
+    } else if (schedule.frequency === 'MONTHLY') {
+      nextRun.setMonth(nextRun.getMonth() + 1);
+    } else {
+      status = 'COMPLETED'; // One-time scheduled payments are complete
+    }
+    
+    const updated = await prisma.scheduledPayout.update({
+      where: { id },
+      data: { nextRun, status }
+    });
+    
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BLOCKCHAIN EVENT INDEXER (OPTION A)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,20 +515,29 @@ async function indexPayments(fromBlock: bigint, toBlock: bigint) {
 
       const timestamp = await getBlockTimestamp(blockNumber!);
 
-      await prisma.transaction.upsert({
-        where: { txHash: transactionHash },
-        update: {},
-        create: {
+      const exists = await prisma.transaction.findFirst({
+        where: {
           txHash: transactionHash,
-          fromAddress,
           toAddress,
           amount,
           memo,
-          status: 'COMPLETED',
-          blockNumber: Number(blockNumber),
-          timestamp
         }
       });
+
+      if (!exists) {
+        await prisma.transaction.create({
+          data: {
+            txHash: transactionHash,
+            fromAddress,
+            toAddress,
+            amount,
+            memo,
+            status: 'COMPLETED',
+            blockNumber: Number(blockNumber),
+            timestamp
+          }
+        });
+      }
 
       if (memo) {
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

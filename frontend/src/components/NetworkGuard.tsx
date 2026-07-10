@@ -44,16 +44,16 @@ export function NetworkGuard({ children }: { children: React.ReactNode }) {
 
 function SwitchNetworkButton() {
   async function handleSwitch() {
-    const ethereum = (window as any).ethereum
-    if (typeof window === 'undefined' || !ethereum) return
+    const ethereum = typeof window !== 'undefined' ? ((window as any).okxwallet || (window as any).ethereum) : undefined
+    if (!ethereum) return
     try {
       await ethereum.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: '0x' + ARC_CHAIN_ID.toString(16) }],
       })
-    } catch (err: unknown) {
-      // Chain not added yet — add it
-      if (err && typeof err === 'object' && 'code' in err && (err as { code: number }).code === 4902) {
+    } catch (err: any) {
+      // Fallback: If switch fails (e.g. unrecognized chain ID, or wallet-specific error code), attempt to add the chain
+      try {
         await ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
@@ -64,6 +64,8 @@ function SwitchNetworkButton() {
             blockExplorerUrls: ['https://testnet.arcscan.app'],
           }],
         })
+      } catch (addErr) {
+        console.error('Failed to add network:', addErr)
       }
     }
   }

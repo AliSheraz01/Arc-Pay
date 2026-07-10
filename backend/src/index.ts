@@ -1,13 +1,26 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
+import { createClient } from '@libsql/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import dotenv from 'dotenv';
 import { createPublicClient, http, decodeFunctionData } from 'viem';
 
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
+
+const dbUrl = process.env.DATABASE_URL && process.env.DATABASE_URL !== 'undefined'
+  ? process.env.DATABASE_URL
+  : 'file:./dev.db';
+
+console.log(`[Database] Initializing connection to: ${dbUrl}`);
+
+const libsql = createClient({
+  url: dbUrl,
+});
+const adapter = new PrismaLibSql(libsql as any);
+const prisma = new PrismaClient({ adapter });
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());

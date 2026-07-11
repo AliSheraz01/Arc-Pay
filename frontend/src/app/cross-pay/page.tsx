@@ -7,9 +7,9 @@ import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, Md
 import { ChevronDown, RefreshCw, ArrowUpDown, Check, Wallet, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
-import { parseUnits, isAddress, createPublicClient, http } from 'viem'
+import { parseUnits, isAddress, createPublicClient, http, decodeEventLog, keccak256 } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
-import { REGISTRY_ABI, USDC_ABI } from '@/lib/abi'
+import { REGISTRY_ABI, USDC_ABI, MESSAGE_TRANSMITTER_ABI } from '@/lib/abi'
 
 // ---- Real chain configs (verified chain IDs / public RPCs / explorers) ----
 const CHAINS = [
@@ -116,25 +116,29 @@ const CHAINS = [
 ];
 
 // CCTP USDC & Messenger configs per Chain ID
-const CCTP_CONFIGS: Record<number, { usdc: `0x${string}`, messenger: `0x${string}`, decimals: number }> = {
+const CCTP_CONFIGS: Record<number, { usdc: `0x${string}`, messenger: `0x${string}`, messageTransmitter: `0x${string}`, decimals: number }> = {
   11155111: { // Ethereum Sepolia
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
     messenger: CCTP_TOKEN_MESSENGER,
+    messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
     decimals: 6
   },
   421614: { // Arbitrum Sepolia
     usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
     messenger: '0x127156157f13C07f6c3D02319c59508821034c4C',
+    messageTransmitter: '0x109bc137cb64Eab7C0b1ddDd1EDfF241F719705d',
     decimals: 6
   },
   84532: { // Base Sepolia
     usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
     messenger: '0x1682ae6375C4E8A7D564BC4930e159937D76e654',
+    messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
     decimals: 6
   },
   5042002: { // Arc Testnet
     usdc: '0x3600000000000000000000000000000000000000',
     messenger: '0x0000000000000000000000000000000000000000',
+    messageTransmitter: '0x0000000000000000000000000000000000000000',
     decimals: 18
   }
 };
@@ -145,6 +149,7 @@ function getCctpContracts(chainId: number) {
   return {
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as `0x${string}`,
     messenger: CCTP_TOKEN_MESSENGER,
+    messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' as `0x${string}`,
     decimals: 6
   }
 }
@@ -597,19 +602,81 @@ function SendPaymentTab() {
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState('')
 
-  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'approving' | 'burning' | 'attesting' | 'minting' | 'complete'>('idle')
+  const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'approving' | 'burning' | 'attesting' | 'ready_to_claim' | 'claiming' | 'complete'>('idle')
+  const [bridgeMessage, setBridgeMessage] = useState<string | null>(null)
+  const [bridgeAttestation, setBridgeAttestation] = useState<string | null>(null)
   const [balanceMap, setBalanceMap] = useState<Record<string, string>>({})
   const [loadingBalances, setLoadingBalances] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const startPolling = useCallback((msgHash: string, currentMessage: string, destChainId: number) => {
+    let attempts = 0
+    const maxAttempts = 150
+    const interval = setInterval(async () => {
+      try {
+        attempts++
+        const res = await fetch(`https://iris-api-sandbox.circle.com/attestations/${msgHash}`)
+        const data = await res.json()
+        
+        if (data.status === 'complete' && data.attestation) {
+          clearInterval(interval)
+          setBridgeAttestation(data.attestation)
+          setBridgeStatus('ready_to_claim')
+          
+          // Save attestation to local storage
+          localStorage.setItem('arc_pending_cross_tx', JSON.stringify({
+            bridgeMessage: currentMessage,
+            msgHash,
+            attestation: data.attestation,
+            toChainIdDec: destChainId
+          }))
+        }
+        
+        if (attempts >= maxAttempts) {
+          clearInterval(interval)
+          console.error("Attestation polling timed out")
+          setBridgeStatus('idle')
+        }
+      } catch (err) {
+        console.error("Error polling attestation:", err)
+      }
+    }, 6000)
+  }, [])
+
+  useEffect(() => {
+    const pendingTxStr = localStorage.getItem('arc_pending_cross_tx')
+    if (pendingTxStr) {
+      try {
+        const pendingTx = JSON.parse(pendingTxStr)
+        if (pendingTx.bridgeMessage) {
+          setBridgeMessage(pendingTx.bridgeMessage)
+          if (pendingTx.toChainIdDec) {
+            const destChain = CHAINS.find(c => c.chainIdDec === pendingTx.toChainIdDec)
+            if (destChain) setToChain(destChain)
+          }
+          
+          if (pendingTx.attestation) {
+            setBridgeAttestation(pendingTx.attestation)
+            setBridgeStatus('ready_to_claim')
+          } else if (pendingTx.msgHash) {
+            setBridgeStatus('attesting')
+            startPolling(pendingTx.msgHash, pendingTx.bridgeMessage, pendingTx.toChainIdDec)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse pending cross tx", err)
+      }
+    }
+  }, [startPolling])
 
   // Contract calls configurations
   const currentCctp = getCctpContracts(fromChain.chainIdDec)
   const { writeContractAsync: writeContractApprove, data: approveHash } = useWriteContract()
   const { isLoading: isConfirmingApprove, isSuccess: isConfirmedApprove } = useWaitForTransactionReceipt({ hash: approveHash })
 
-  const { writeContractAsync: writeContractDeposit, data: depositHash, isPending: isPendingDeposit } = useWriteContract()
-  const { isLoading: isConfirmingDeposit, isSuccess: isConfirmedDeposit } = useWaitForTransactionReceipt({ hash: depositHash })
+  const { writeContractAsync: writeContractDeposit, data: depositHash } = useWriteContract()
+  const { writeContractAsync: writeContractClaim } = useWriteContract()
 
   // Read allowance
   const { data: allowance } = useReadContract({
@@ -696,11 +763,44 @@ function SendPaymentTab() {
     }
   }, [])
 
-  const executeDeposit = async (targetAddr: `0x${string}`, parsedAmount: bigint) => {
+  const handleSendCrossChain = async () => {
+    if (!amount || (!resolvedAddress && !address && !recipient)) return
+    
+    const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
+    if (!targetAddress) return
+    
+    const contracts = getCctpContracts(fromChain.chainIdDec)
+    const parsedAmount = parseUnits(amount, contracts.decimals)
+    
     try {
+      if (allowance === undefined || (allowance as bigint) < parsedAmount) {
+        setBridgeStatus('approving')
+        const txHash = await writeContractApprove({
+          address: contracts.usdc,
+          abi: USDC_ABI,
+          functionName: 'approve',
+          args: [contracts.messenger, parsedAmount]
+        })
+
+        if (publicClient) {
+          try {
+            await publicClient.waitForTransactionReceipt({ hash: txHash })
+          } catch (receiptErr) {
+            console.warn("Failed to get transaction receipt, proceeding with fallback delay:", receiptErr)
+            await new Promise(resolve => setTimeout(resolve, 4000))
+          }
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 4000))
+        }
+      }
+      
       setBridgeStatus('burning')
-      const contracts = getCctpContracts(fromChain.chainIdDec)
-      await writeContractDeposit({
+      const targetBytes32 = ('0x000000000000000000000000' + targetAddress.replace('0x', '')) as `0x${string}`
+      const destDomain = getCctpDomain(toChain.chainIdDec) === getCctpDomain(fromChain.chainIdDec)
+        ? (getCctpDomain(fromChain.chainIdDec) === 0 ? 6 : 0)
+        : getCctpDomain(toChain.chainIdDec)
+
+      const txHash = await writeContractDeposit({
         address: contracts.messenger,
         abi: [{
           "inputs": [
@@ -715,68 +815,78 @@ function SendPaymentTab() {
           "type": "function"
         }],
         functionName: 'depositForBurn',
-        args: [
-          parsedAmount,
-          (getCctpDomain(toChain.chainIdDec) === getCctpDomain(fromChain.chainIdDec)
-            ? (getCctpDomain(fromChain.chainIdDec) === 0 ? 6 : 0)
-            : getCctpDomain(toChain.chainIdDec)), // Map dest chainId to Circle Domain (dynamic fallback preventing same-domain revert)
-          ('0x000000000000000000000000' + targetAddr.replace('0x', '')) as `0x${string}`, // Pad to bytes32
-          contracts.usdc
-        ]
+        args: [parsedAmount, destDomain, targetBytes32, contracts.usdc]
       })
-    } catch (e) {
-      console.error("Deposit failed", e)
-      setBridgeStatus('idle')
-    }
-  }
 
-  const handleSendCrossChain = async () => {
-    if (!amount || (!resolvedAddress && !address && !recipient)) return
-    
-    const targetAddress = resolvedAddress || (recipient.trim() === '' ? address : null)
-    if (!targetAddress) return
-    
-    const contracts = getCctpContracts(fromChain.chainIdDec)
-    const parsedAmount = parseUnits(amount, contracts.decimals)
-    
-    try {
-      // Check Allowance and Approve if needed
-      if (allowance === undefined || (allowance as bigint) < parsedAmount) {
-        setBridgeStatus('approving')
-        const txHash = await writeContractApprove({
-          address: contracts.usdc,
-          abi: USDC_ABI,
-          functionName: 'approve',
-          args: [contracts.messenger, parsedAmount]
-        })
-
-        // Wait for transaction to be mined/confirmed
-        if (publicClient) {
-          try {
-            await publicClient.waitForTransactionReceipt({ hash: txHash })
-          } catch (receiptErr) {
-            console.warn("Failed to get transaction receipt, proceeding with fallback delay:", receiptErr)
-            await new Promise(resolve => setTimeout(resolve, 4000))
-          }
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 4000))
-        }
-      }
+      if (!publicClient) throw new Error("No public client")
       
-      // Proceed directly to execute the deposit
-      await executeDeposit(targetAddress as `0x${string}`, parsedAmount)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+      
+      setBridgeStatus('attesting')
+      const messageSentTopic = '0x8c5261668696ce22758910d05bab8f186d6eb247ceac2af2e82c7dc17669b036'
+      const log = receipt.logs.find(l => l.topics[0] === messageSentTopic)
+      if (!log) throw new Error("MessageSent log not found")
+      
+      const decoded = decodeEventLog({
+        abi: MESSAGE_TRANSMITTER_ABI,
+        data: log.data,
+        topics: log.topics,
+        eventName: 'MessageSent'
+      })
+      const messageBytes = decoded.args.message as string
+      setBridgeMessage(messageBytes)
+      
+      const msgHash = keccak256(messageBytes as `0x${string}`)
+      
+      // Save initial state to local storage
+      localStorage.setItem('arc_pending_cross_tx', JSON.stringify({
+        bridgeMessage: messageBytes,
+        msgHash,
+        toChainIdDec: toChain.chainIdDec
+      }))
+      
+      // Poll for Attestation
+      startPolling(msgHash, messageBytes, toChain.chainIdDec)
+
     } catch (e) {
        console.error("Transaction failed", e)
        setBridgeStatus('idle')
     }
   }
 
-  // Update bridge status tracker based on Deposit status
-  useEffect(() => {
-    if (isPendingDeposit) setBridgeStatus('burning')
-    else if (isConfirmingDeposit) setBridgeStatus('attesting')
-    else if (isConfirmedDeposit) setBridgeStatus('complete')
-  }, [isPendingDeposit, isConfirmingDeposit, isConfirmedDeposit])
+  const handleClaim = async () => {
+    if (!bridgeMessage || !bridgeAttestation) return
+    if (activeChainId !== toChain.chainIdDec) {
+      if (switchChainAsync) {
+        try {
+          await switchChainAsync({ chainId: toChain.chainIdDec })
+        } catch (err) {
+          console.error("Failed to switch chain", err)
+        }
+      }
+      return
+    }
+
+    try {
+      setBridgeStatus('claiming')
+      const contracts = getCctpContracts(toChain.chainIdDec)
+      const txHash = await writeContractClaim({
+        address: contracts.messageTransmitter,
+        abi: MESSAGE_TRANSMITTER_ABI,
+        functionName: 'receiveMessage',
+        args: [bridgeMessage as `0x${string}`, bridgeAttestation as `0x${string}`]
+      })
+
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: txHash })
+      }
+      setBridgeStatus('complete')
+      localStorage.removeItem('arc_pending_cross_tx')
+    } catch (e) {
+      console.error("Claim failed", e)
+      setBridgeStatus('ready_to_claim')
+    }
+  }
 
   const handleFromChainChange = async (c: typeof CHAINS[0]) => {
     setFromChain(c)
@@ -887,7 +997,17 @@ function SendPaymentTab() {
         </div>
       )}
 
-      {!walletOnCorrectChain ? (
+      {bridgeStatus === 'ready_to_claim' || bridgeStatus === 'claiming' ? (
+        <button 
+          onClick={handleClaim}
+          disabled={bridgeStatus === 'claiming'}
+          style={{
+            width: '100%', padding: '18px', background: bridgeStatus === 'claiming' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus === 'claiming' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus === 'claiming' ? 'none' : '0 4px 16px var(--accent-glow)', transition: 'all 0.2s'
+          }}
+        >
+          {bridgeStatus === 'ready_to_claim' && activeChainId !== toChain.chainIdDec ? `Switch Wallet to ${toChain.name} to Claim` : (bridgeStatus === 'claiming' ? 'Claiming Funds...' : 'Claim Funds')}
+        </button>
+      ) : !walletOnCorrectChain ? (
         <button
           type="button"
           onClick={() => switchChainAsync && switchChainAsync({ chainId: fromChain.chainIdDec })}
@@ -908,16 +1028,15 @@ function SendPaymentTab() {
           {bridgeStatus === 'idle' && 'Send Cross-Chain Payment'}
           {bridgeStatus === 'approving' && 'Approving USDC in wallet...'}
           {bridgeStatus === 'burning' && 'Confirming Deposit...'}
-          {bridgeStatus === 'attesting' && 'Processing transaction...'}
-          {bridgeStatus === 'minting' && 'Minting USDC...'}
-          {bridgeStatus === 'complete' && 'Payment Sent!'}
+          {bridgeStatus === 'attesting' && 'Waiting for Circle Attestation...'}
+          {bridgeStatus === 'complete' && 'Payment Sent & Claimed!'}
         </button>
       )}
 
       {/* Confirmation statuses */}
       {bridgeStatus === 'complete' && (
         <div style={{ padding: '16px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-          <MdCheckCircle size={20} /> Transaction successful! TX: {depositHash?.slice(0,10)}...
+          <MdCheckCircle size={20} /> Transaction successful! Funds have arrived on the destination chain.
         </div>
       )}
       {bridgeStatus === 'approving' && (
@@ -930,9 +1049,14 @@ function SendPaymentTab() {
           <Loader2 size={16} className="animate-spin" color="var(--text-secondary)" /> Please confirm the cross-chain deposit in your wallet...
         </div>
       )}
-      {(bridgeStatus === 'attesting' || bridgeStatus === 'minting') && (
+      {bridgeStatus === 'attesting' && (
         <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Processing cross-chain transfer (may take a few minutes)...
+          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Waiting for Circle Attestation (may take a few minutes)...
+        </div>
+      )}
+      {bridgeStatus === 'claiming' && (
+        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Claiming funds on destination chain...
         </div>
       )}
     </div>

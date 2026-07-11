@@ -120,3 +120,24 @@ export const BULK_ROUTER_ABI = [
     ],
   },
 ] as const
+
+// ABI for CCTP MessageTransmitter
+export const MESSAGE_TRANSMITTER_ABI = [
+  {
+    name: 'receiveMessage',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'message', type: 'bytes' },
+      { name: 'attestation', type: 'bytes' }
+    ],
+    outputs: [{ name: 'success', type: 'bool' }]
+  },
+  {
+    name: 'MessageSent',
+    type: 'event',
+    inputs: [
+      { name: 'message', type: 'bytes', indexed: false }
+    ]
+  }
+] as const

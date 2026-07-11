@@ -115,23 +115,22 @@ const CHAINS = [
   }
 ];
 
-// CCTP USDC & Messenger configs per Chain ID
 const CCTP_CONFIGS: Record<number, { usdc: `0x${string}`, messenger: `0x${string}`, messageTransmitter: `0x${string}`, decimals: number }> = {
   11155111: { // Ethereum Sepolia
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    messenger: CCTP_TOKEN_MESSENGER,
+    messenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
     messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
     decimals: 6
   },
   421614: { // Arbitrum Sepolia
     usdc: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    messenger: '0x127156157f13C07f6c3D02319c59508821034c4C',
-    messageTransmitter: '0x109bc137cb64Eab7C0b1ddDd1EDfF241F719705d',
+    messenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
+    messageTransmitter: '0xaCF1ceeF359C5826AB12B263FBEb2fcd1bFA84A1',
     decimals: 6
   },
   84532: { // Base Sepolia
     usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    messenger: '0x1682ae6375C4E8A7D564BC4930e159937D76e654',
+    messenger: '0x9c336b12aE09b8D28b14a2b25B95180f146FbfB8',
     messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD',
     decimals: 6
   },
@@ -148,7 +147,7 @@ function getCctpContracts(chainId: number) {
   if (cfg) return cfg
   return {
     usdc: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as `0x${string}`,
-    messenger: CCTP_TOKEN_MESSENGER,
+    messenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5' as `0x${string}`,
     messageTransmitter: '0x7865fAfC2db2093669d92c0F33AeEF291086BEFD' as `0x${string}`,
     decimals: 6
   }
@@ -771,6 +770,18 @@ function SendPaymentTab() {
     
     const contracts = getCctpContracts(fromChain.chainIdDec)
     const parsedAmount = parseUnits(amount, contracts.decimals)
+
+    // Check balance before attempting to prevent silent simulation failures
+    const currentBal = balanceMap[fromChain.id]
+    if (!currentBal || currentBal === "—") {
+       setError("Could not read your USDC balance. Please try refreshing.")
+       return
+    }
+    const currentBalParsed = parseUnits(currentBal, contracts.decimals)
+    if (parsedAmount > currentBalParsed) {
+       setError(`Insufficient balance. You only have ${currentBal} USDC on ${fromChain.name}.`)
+       return
+    }
     
     try {
       if (allowance === undefined || (allowance as bigint) < parsedAmount) {

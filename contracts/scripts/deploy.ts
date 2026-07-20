@@ -25,6 +25,13 @@ async function main() {
   const routerAddress = await router.getAddress()
   console.log('ArcPayRouter deployed to:', routerAddress)
 
+  // Deploy Scheduler
+  const Scheduler = await ethers.getContractFactory('ArcPayScheduler')
+  const scheduler = await Scheduler.deploy(USDC_ADDRESS)
+  await scheduler.waitForDeployment()
+  const schedulerAddress = await scheduler.getAddress()
+  console.log('ArcPayScheduler deployed to:', schedulerAddress)
+
   // Save deployment info
   const deployment = {
     network: 'arc_testnet',
@@ -32,6 +39,7 @@ async function main() {
     usdcAddress: USDC_ADDRESS,
     registryAddress,
     routerAddress,
+    schedulerAddress,
     deployedAt: new Date().toISOString(),
     deployer: deployer.address,
   }
@@ -44,6 +52,7 @@ async function main() {
   console.log('\n--- Update your frontend .env.local ---')
   console.log(`NEXT_PUBLIC_REGISTRY_ADDRESS=${registryAddress}`)
   console.log(`NEXT_PUBLIC_ROUTER_ADDRESS=${routerAddress}`)
+  console.log(`NEXT_PUBLIC_SCHEDULER_ADDRESS=${schedulerAddress}`)
 }
 
 main().catch((error) => {

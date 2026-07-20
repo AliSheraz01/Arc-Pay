@@ -13,6 +13,21 @@ const config: HardhatUserConfig = {
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
   },
+  etherscan: {
+    apiKey: {
+      arc_testnet: "empty" // Blockscout typically doesn't need an API key
+    },
+    customChains: [
+      {
+        network: "arc_testnet",
+        chainId: 5042002,
+        urls: {
+          apiURL: "https://testnet.arcscan.app/api",
+          browserURL: "https://testnet.arcscan.app"
+        }
+      }
+    ]
+  }
 };
 
 export default config;

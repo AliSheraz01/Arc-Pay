@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { LoginButton } from './LoginButton'
+import { NetworkSwitcher } from './NetworkSwitcher'
 import { FaucetModal } from '@/components/FaucetModal'
 export function Header() {
 
@@ -52,6 +53,7 @@ export function Header() {
       {/* Right — Faucet + Wallet */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <FaucetModal />
+        <NetworkSwitcher />
         <LoginButton />
       </div>
 

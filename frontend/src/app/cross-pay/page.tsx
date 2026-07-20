@@ -6,8 +6,8 @@ import { NetworkGuard } from '@/components/NetworkGuard'
 import { MdSend, MdHistory, MdHealing, MdArrowBack, MdSearch, MdErrorOutline, MdCheckCircle } from 'react-icons/md'
 import { ChevronDown, RefreshCw, ArrowUpDown, Check, Wallet, Loader2 } from 'lucide-react'
 import Link from 'next/link'
-import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
-import { parseUnits, isAddress, createPublicClient, http, decodeEventLog, keccak256 } from 'viem'
+import { useAccount, useSwitchChain, useChainId, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient, useGasPrice } from 'wagmi'
+import { parseUnits, isAddress, createPublicClient, http, decodeEventLog, keccak256, formatEther } from 'viem'
 import { CCTP_TOKEN_MESSENGER, getCctpDomain, BACKEND_URL, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI, MESSAGE_TRANSMITTER_ABI } from '@/lib/abi'
 
@@ -599,15 +599,18 @@ function SendPaymentTab() {
 
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
   const [resolving, setResolving] = useState(false)
-  const [resolveError, setResolveError] = useState('')
+  const [resolveError, setResolveError] = useState<string | null>(null)
+  const [loadingBalances, setLoadingBalances] = useState(false)
+  const [spinning, setSpinning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: sourceGasPrice } = useGasPrice({ chainId: fromChain.chainIdDec, query: { refetchInterval: 10000 } })
+  const { data: destGasPrice } = useGasPrice({ chainId: toChain.chainIdDec, query: { refetchInterval: 10000 } })
 
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'approving' | 'burning' | 'attesting' | 'ready_to_claim' | 'claiming' | 'complete'>('idle')
   const [bridgeMessage, setBridgeMessage] = useState<string | null>(null)
   const [bridgeAttestation, setBridgeAttestation] = useState<string | null>(null)
   const [balanceMap, setBalanceMap] = useState<Record<string, string>>({})
-  const [loadingBalances, setLoadingBalances] = useState(false)
-  const [spinning, setSpinning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const startPolling = useCallback((msgHash: string, currentMessage: string, destChainId: number) => {
     let attempts = 0
@@ -934,142 +937,238 @@ function SendPaymentTab() {
   const walletOnCorrectChain = activeChainId === fromChain.chainIdDec
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)" }}>Select Bridge Path</span>
-        <button
-          type="button"
-          onClick={refresh}
-          aria-label="Refresh Balances"
-          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-        >
-          <RefreshCw size={13} color="var(--text-secondary)" style={{ animation: spinning ? "spin 0.5s linear" : "none" }} />
-        </button>
-      </div>
+    <div className="bridge-layout">
+      <div className="panel-box">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: '16px' }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)" }}>Cross-chain transfers</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Last updated: Just now</span>
+            <button
+              type="button"
+              onClick={refresh}
+              aria-label="Refresh Balances"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: 'all 0.2s' }}
+            >
+              <RefreshCw size={14} color="var(--text-secondary)" style={{ animation: spinning ? "spin 0.5s linear" : "none" }} />
+            </button>
+          </div>
+        </div>
 
-      <Panel
-        label="From (Source Chain)"
-        chain={fromChain}
-        onChainChange={handleFromChainChange}
-        disabledId={toChain.id}
-        amount={amount}
-        onAmountChange={setAmount}
-        balanceMap={balanceMap}
-        loadingBalances={loadingBalances}
-        onMax={handleMax}
-      />
-
-      <div style={{ display: 'flex', justifyContent: 'center', margin: '-10px 0' }}>
-        <button
-          type="button"
-          onClick={swapDirection}
-          aria-label="Swap direction"
-          style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 2, position: "relative" }}
-        >
-          <ArrowUpDown size={15} color="var(--text-secondary)" />
-        </button>
-      </div>
-
-      <Panel
-        label="To (Destination Chain)"
-        chain={toChain}
-        onChainChange={setToChain}
-        disabledId={fromChain.id}
-        amount={amount}
-        readOnly
-        balanceMap={balanceMap}
-        loadingBalances={loadingBalances}
-      />
-
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Recipient (@username or Address)</label>
-        <input 
-          type="text" 
-          placeholder="@alisheraz0ev or 0x... (Default: Your own address)" 
-          value={recipient}
-          onChange={e => {
-            setRecipient(e.target.value)
-            resolveRecipient(e.target.value)
-          }}
-          style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', outline: 'none' }}
+        <Panel
+          label="From"
+          chain={fromChain}
+          onChainChange={handleFromChainChange}
+          disabledId={toChain.id}
+          amount={amount}
+          onAmountChange={setAmount}
+          balanceMap={balanceMap}
+          loadingBalances={loadingBalances}
+          onMax={handleMax}
         />
-        {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving username...</div>}
-        {resolveError && <div style={{ fontSize: '12px', color: '#ff4466', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdErrorOutline /> {resolveError}</div>}
-        {resolvedAddress && !resolving && !resolveError && recipient !== resolvedAddress && (
-          <div style={{ fontSize: '12px', color: 'var(--green)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <MdCheckCircle /> Resolved: {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+
+        <div style={{ display: 'flex', justifyContent: 'center', margin: '-14px 0', position: 'relative', zIndex: 5 }}>
+          <button
+            type="button"
+            onClick={swapDirection}
+            aria-label="Swap direction"
+            style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
+          >
+            <ArrowUpDown size={15} color="var(--text-secondary)" />
+          </button>
+        </div>
+
+        <Panel
+          label="To"
+          chain={toChain}
+          onChainChange={setToChain}
+          disabledId={fromChain.id}
+          amount={amount}
+          readOnly
+          balanceMap={balanceMap}
+          loadingBalances={loadingBalances}
+        />
+
+        <div style={{ marginTop: '20px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Recipient (@username or Address)</label>
+          <input 
+            type="text" 
+            placeholder="@alisheraz0ev or 0x... (Default: Your address)" 
+            value={recipient}
+            onChange={e => {
+              setRecipient(e.target.value)
+              resolveRecipient(e.target.value)
+            }}
+            style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', outline: 'none' }}
+          />
+          {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving username...</div>}
+          {resolveError && <div style={{ fontSize: '12px', color: '#ff4466', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdErrorOutline /> {resolveError}</div>}
+          {resolvedAddress && !resolving && !resolveError && recipient !== resolvedAddress && (
+            <div style={{ fontSize: '12px', color: 'var(--green)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <MdCheckCircle /> Resolved: {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div style={{ fontSize: 12, color: "#ff6b6b", background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 8, padding: "8px 10px", marginTop: '20px' }}>
+            {error}
           </div>
         )}
+
+        <div style={{ marginTop: '24px' }}>
+          {bridgeStatus === 'ready_to_claim' || bridgeStatus === 'claiming' ? (
+            <button 
+              onClick={handleClaim}
+              disabled={bridgeStatus === 'claiming'}
+              style={{
+                width: '100%', padding: '18px', background: bridgeStatus === 'claiming' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus === 'claiming' ? 'not-allowed' : 'pointer', boxShadow: bridgeStatus === 'claiming' ? 'none' : '0 4px 16px var(--accent-glow)', transition: 'all 0.2s'
+              }}
+            >
+              {bridgeStatus === 'ready_to_claim' && activeChainId !== toChain.chainIdDec ? `Switch Wallet to ${toChain.name} to Claim` : (bridgeStatus === 'claiming' ? 'Claiming Funds...' : 'Claim Funds')}
+            </button>
+          ) : !walletOnCorrectChain ? (
+            <button
+              type="button"
+              onClick={() => switchChainAsync && switchChainAsync({ chainId: fromChain.chainIdDec })}
+              style={{
+                width: '100%', padding: '18px', background: 'var(--yellow)', color: 'black', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              Switch Wallet to {fromChain.name}
+            </button>
+          ) : (
+            <button 
+              onClick={handleSendCrossChain}
+              disabled={bridgeStatus !== 'idle'}
+              style={{
+                width: '100%', padding: '18px', background: bridgeStatus !== 'idle' ? 'var(--text-secondary)' : 'var(--red)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus !== 'idle' ? 'not-allowed' : 'pointer', boxShadow: bridgeStatus !== 'idle' ? 'none' : '0 4px 16px rgba(225,29,46,0.3)', transition: 'all 0.2s'
+              }}
+            >
+              {bridgeStatus === 'idle' && 'APPROVE & BRIDGE'}
+              {bridgeStatus === 'approving' && 'Approving USDC...'}
+              {bridgeStatus === 'burning' && 'Confirming Deposit...'}
+              {bridgeStatus === 'attesting' && 'Waiting for Circle API...'}
+              {bridgeStatus === 'complete' && 'Bridged!'}
+            </button>
+          )}
+        </div>
+
+        {/* Status Indicators */}
+        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {bridgeStatus === 'complete' && (
+            <div style={{ padding: '12px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '14px' }}>
+              <MdCheckCircle size={18} /> Transaction successful!
+            </div>
+          )}
+          {bridgeStatus === 'attesting' && (
+            <div style={{ padding: '12px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '14px' }}>
+              <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Waiting for Circle Attestation...
+            </div>
+          )}
+        </div>
       </div>
 
-      {error && (
-        <div style={{ fontSize: 12, color: "#ff6b6b", background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 8, padding: "8px 10px" }}>
-          {error}
+      {/* Right Route Details Panel */}
+      <div className="panel-box route-details">
+        <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: '24px' }}>Route Details</h3>
+        
+        <div className="detail-row">
+          <span className="detail-label">Expected Output</span>
+          <span className="detail-value">{amount || '0'} USDC</span>
         </div>
-      )}
+        
+        <div className="detail-row">
+          <span className="detail-label">Via</span>
+          <span className="detail-value" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#2775ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: 'white', fontSize: 10, fontWeight: 800 }}>C</span>
+            </div>
+            <span style={{ background: '#4a3bff', color: 'white', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>CCTP V2</span>
+          </span>
+        </div>
+        
+        <div className="detail-row">
+          <span className="detail-label">Route</span>
+          <span className="detail-value" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+            {fromChain.name} <span style={{ color: 'var(--text-secondary)' }}>→</span> {toChain.name}
+          </span>
+        </div>
+        
+        <div className="detail-row">
+          <span className="detail-label">Estimated Time</span>
+          <span className="detail-value">~ 15 - 20s</span>
+        </div>
+        
+        <div className="detail-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span className="detail-label">Est. Network Fee</span>
+          </div>
+          <div className="fee-sub-row">
+            <span>Approve:</span>
+            <span>{sourceGasPrice ? `~ ${parseFloat(formatEther(sourceGasPrice * BigInt(45000))).toFixed(6)} ETH` : 'Unavailable'}</span>
+          </div>
+          <div className="fee-sub-row">
+            <span>Burn:</span>
+            <span>{sourceGasPrice ? `~ ${parseFloat(formatEther(sourceGasPrice * BigInt(100000))).toFixed(6)} ETH` : 'Unavailable'}</span>
+          </div>
+          <div className="fee-sub-row">
+            <span>Mint:</span>
+            <span>{destGasPrice ? `~ ${parseFloat(formatEther(destGasPrice * BigInt(150000))).toFixed(6)} ETH` : 'Unavailable'}</span>
+          </div>
+        </div>
+        
+        <div className="detail-row">
+          <span className="detail-label">Platform Fee</span>
+          <span className="detail-value" style={{ color: 'var(--green)' }}>$0</span>
+        </div>
+      </div>
 
-      {bridgeStatus === 'ready_to_claim' || bridgeStatus === 'claiming' ? (
-        <button 
-          onClick={handleClaim}
-          disabled={bridgeStatus === 'claiming'}
-          style={{
-            width: '100%', padding: '18px', background: bridgeStatus === 'claiming' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus === 'claiming' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus === 'claiming' ? 'none' : '0 4px 16px var(--accent-glow)', transition: 'all 0.2s'
-          }}
-        >
-          {bridgeStatus === 'ready_to_claim' && activeChainId !== toChain.chainIdDec ? `Switch Wallet to ${toChain.name} to Claim` : (bridgeStatus === 'claiming' ? 'Claiming Funds...' : 'Claim Funds')}
-        </button>
-      ) : !walletOnCorrectChain ? (
-        <button
-          type="button"
-          onClick={() => switchChainAsync && switchChainAsync({ chainId: fromChain.chainIdDec })}
-          style={{
-            width: '100%', padding: '18px', background: 'var(--yellow)', color: 'black', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: 800, cursor: 'pointer', marginTop: '12px', transition: 'all 0.2s'
-          }}
-        >
-          Switch Wallet to {fromChain.name}
-        </button>
-      ) : (
-        <button 
-          onClick={handleSendCrossChain}
-          disabled={bridgeStatus !== 'idle'}
-          style={{
-            width: '100%', padding: '18px', background: bridgeStatus !== 'idle' ? 'var(--text-secondary)' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: 800, cursor: bridgeStatus !== 'idle' ? 'not-allowed' : 'pointer', marginTop: '12px', boxShadow: bridgeStatus !== 'idle' ? 'none' : '0 4px 16px var(--accent-glow)', transition: 'all 0.2s'
-          }}
-        >
-          {bridgeStatus === 'idle' && 'Send Cross-Chain Payment'}
-          {bridgeStatus === 'approving' && 'Approving USDC in wallet...'}
-          {bridgeStatus === 'burning' && 'Confirming Deposit...'}
-          {bridgeStatus === 'attesting' && 'Waiting for Circle Attestation...'}
-          {bridgeStatus === 'complete' && 'Payment Sent & Claimed!'}
-        </button>
-      )}
-
-      {/* Confirmation statuses */}
-      {bridgeStatus === 'complete' && (
-        <div style={{ padding: '16px', background: 'var(--green-glow)', color: 'var(--green)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-          <MdCheckCircle size={20} /> Transaction successful! Funds have arrived on the destination chain.
-        </div>
-      )}
-      {bridgeStatus === 'approving' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <Loader2 size={16} className="animate-spin" color="var(--text-secondary)" /> Waiting for approval...
-        </div>
-      )}
-      {bridgeStatus === 'burning' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-secondary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <Loader2 size={16} className="animate-spin" color="var(--text-secondary)" /> Please confirm the cross-chain deposit in your wallet...
-        </div>
-      )}
-      {bridgeStatus === 'attesting' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Waiting for Circle Attestation (may take a few minutes)...
-        </div>
-      )}
-      {bridgeStatus === 'claiming' && (
-        <div style={{ padding: '16px', background: 'var(--surface-raised)', color: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <Loader2 size={16} className="animate-spin" color="var(--accent)" /> Claiming funds on destination chain...
-        </div>
-      )}
+      <style jsx>{`
+        .bridge-layout {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+        @media (min-width: 900px) {
+          .bridge-layout {
+            grid-template-columns: 1.2fr 1fr;
+          }
+        }
+        .panel-box {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 20px;
+          padding: 24px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+        }
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 14px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          font-size: 14px;
+        }
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+        .detail-label {
+          color: var(--text-secondary);
+          font-weight: 500;
+        }
+        .detail-value {
+          color: var(--text-primary);
+          font-weight: 700;
+        }
+        .fee-sub-row {
+          font-size: 12px;
+          color: var(--text-secondary);
+          display: flex;
+          justify-content: space-between;
+          margin-top: 6px;
+        }
+      `}</style>
     </div>
   )
 }

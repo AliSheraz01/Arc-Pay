@@ -3,7 +3,9 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import dotenv from 'dotenv';
-import { createPublicClient, http, decodeFunctionData, isAddress } from 'viem';
+import { createPublicClient, http, decodeFunctionData, isAddress, createWalletClient, defineChain } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -320,7 +322,7 @@ app.get('/api/payouts/schedule/:address', async (req, res) => {
 // Create a scheduled payout
 app.post('/api/payouts/schedule', async (req, res) => {
   try {
-    const { name, description, frequency, recipients, totalAmount, nextRun, ownerAddress } = req.body;
+    const { id, name, description, frequency, recipients, totalAmount, nextRun, ownerAddress } = req.body;
     
     // Server-side validation
     if (!name || !name.trim()) {
@@ -340,6 +342,9 @@ app.post('/api/payouts/schedule', async (req, res) => {
     }
     if (!recipients) {
       return res.status(400).json({ error: 'Recipients list is required.' });
+    }
+    if (!id) {
+      return res.status(400).json({ error: 'Schedule ID is required.' });
     }
 
     let parsedRecipients: any[] = [];
@@ -373,6 +378,7 @@ app.post('/api/payouts/schedule', async (req, res) => {
 
     const schedule = await prisma.scheduledPayout.create({
       data: {
+        id,
         name: name.trim(),
         description: description ? description.trim() : null,
         frequency,
@@ -676,4 +682,95 @@ async function startIndexer() {
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
   startIndexer();
+  startSchedulerCron();
 });
+
+// ==========================================
+// SCHEDULER CRON JOB
+// ==========================================
+
+const arcTestnet = defineChain({
+  id: 5042002,
+  name: 'Arc Testnet',
+  network: 'arc_testnet',
+  nativeCurrency: { name: 'Arc', symbol: 'ARC', decimals: 18 },
+  rpcUrls: { default: { http: [process.env.RPC_URL || 'https://rpc.testnet.arc.network'] } },
+});
+
+const KEEPER_PK = process.env.KEEPER_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000000';
+const SCHEDULER_ADDRESS = process.env.SCHEDULER_ADDRESS as `0x${string}`;
+
+const keeperAccount = privateKeyToAccount(KEEPER_PK as `0x${string}`);
+const keeperWalletClient = createWalletClient({
+  account: keeperAccount,
+  chain: arcTestnet,
+  transport: http(process.env.RPC_URL || 'https://rpc.testnet.arc.network'),
+});
+
+const schedulerABI = [
+  {
+    "inputs": [{"internalType": "string", "name": "id", "type": "string"}],
+    "name": "executeSchedule",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+] as const;
+
+function startSchedulerCron() {
+  if (!process.env.KEEPER_PRIVATE_KEY) {
+    console.warn('[Scheduler] WARNING: KEEPER_PRIVATE_KEY is missing. Cron job disabled.');
+    return;
+  }
+  
+  console.log('[Scheduler] Initializing cron job (runs every minute)...');
+  
+  cron.schedule('* * * * *', async () => {
+    try {
+      const now = new Date();
+      const dueSchedules = await prisma.scheduledPayout.findMany({
+        where: {
+          status: 'Scheduled', // or ACTIVE, depending on what the frontend uses
+          nextRun: { lte: now }
+        }
+      });
+      
+      if (dueSchedules.length > 0) {
+        console.log(`[Scheduler] Found ${dueSchedules.length} due scheduled payouts.`);
+      }
+      
+      for (const schedule of dueSchedules) {
+        try {
+          console.log(`[Scheduler] Executing schedule ${schedule.id} (${schedule.name})...`);
+          
+          const txHash = await keeperWalletClient.writeContract({
+            address: SCHEDULER_ADDRESS,
+            abi: schedulerABI,
+            functionName: 'executeSchedule',
+            args: [schedule.id],
+          });
+          
+          console.log(`[Scheduler] Transaction sent: ${txHash}`);
+          
+          // Wait for confirmation if desired. For now, optimistic update.
+          if (schedule.frequency === 'MONTHLY') {
+            const next = new Date(schedule.nextRun);
+            next.setMonth(next.getMonth() + 1);
+            await prisma.scheduledPayout.update({ where: { id: schedule.id }, data: { nextRun: next } });
+          } else if (schedule.frequency === 'WEEKLY') {
+            const next = new Date(schedule.nextRun);
+            next.setDate(next.getDate() + 7);
+            await prisma.scheduledPayout.update({ where: { id: schedule.id }, data: { nextRun: next } });
+          } else {
+            await prisma.scheduledPayout.update({ where: { id: schedule.id }, data: { status: 'COMPLETED' } });
+          }
+          console.log(`[Scheduler] Database updated for ${schedule.id}.`);
+        } catch (err) {
+          console.error(`[Scheduler] Failed to execute schedule ${schedule.id}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error('[Scheduler] Cron cycle error:', err);
+    }
+  });
+}

@@ -141,3 +141,35 @@ export const MESSAGE_TRANSMITTER_ABI = [
     ]
   }
 ] as const
+
+// ABI for ArcPayScheduler
+export const SCHEDULER_ABI = [
+  {
+    name: 'createSchedule',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'id', type: 'string' },
+      { name: '_to', type: 'address[]' },
+      { name: '_amounts', type: 'uint256[]' },
+      { name: '_memos', type: 'string[]' },
+      { name: '_nextRun', type: 'uint256' },
+      { name: '_interval', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'executeSchedule',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'id', type: 'string' }],
+    outputs: [],
+  },
+  {
+    name: 'cancelSchedule',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'id', type: 'string' }],
+    outputs: [],
+  }
+] as const

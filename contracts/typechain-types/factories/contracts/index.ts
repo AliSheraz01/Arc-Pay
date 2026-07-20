@@ -3,4 +3,5 @@
 /* eslint-disable */
 export { ArcPayBulkRouter__factory } from "./ArcPayBulkRouter__factory";
 export { ArcPayRouter__factory } from "./ArcPayRouter__factory";
+export { ArcPayScheduler__factory } from "./ArcPayScheduler__factory";
 export { ArcPayUsernameRegistry__factory } from "./ArcPayUsernameRegistry__factory";

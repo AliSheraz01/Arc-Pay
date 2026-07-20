@@ -22,5 +22,7 @@ export type { ArcPayBulkRouter } from "./contracts/ArcPayBulkRouter";
 export { ArcPayBulkRouter__factory } from "./factories/contracts/ArcPayBulkRouter__factory";
 export type { ArcPayRouter } from "./contracts/ArcPayRouter";
 export { ArcPayRouter__factory } from "./factories/contracts/ArcPayRouter__factory";
+export type { ArcPayScheduler } from "./contracts/ArcPayScheduler";
+export { ArcPayScheduler__factory } from "./factories/contracts/ArcPayScheduler__factory";
 export type { ArcPayUsernameRegistry } from "./contracts/ArcPayUsernameRegistry";
 export { ArcPayUsernameRegistry__factory } from "./factories/contracts/ArcPayUsernameRegistry__factory";

@@ -8,10 +8,11 @@ import { NetworkGuard } from '@/components/NetworkGuard'
 import { 
   USDC_ADDRESS, 
   BULK_ROUTER_ADDRESS, 
+  SCHEDULER_ADDRESS,
   BACKEND_URL, 
   EXPLORER_URL 
 } from '@/lib/constants'
-import { USDC_ABI, BULK_ROUTER_ABI } from '@/lib/abi'
+import { USDC_ABI, BULK_ROUTER_ABI, SCHEDULER_ABI } from '@/lib/abi'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { 
@@ -283,11 +284,46 @@ export default function PayoutsPage() {
     setIsSubmittingSchedule(true)
 
     try {
+      const scheduleId = crypto.randomUUID()
+      const addresses = recipients.map(r => r.address as `0x${string}`)
+      const amounts = recipients.map(r => parseUnits(r.amount, decimals))
+      const memos = recipients.map(r => r.memo || r.name || '')
+      
+      const nextRunTime = Math.floor(nextRunDate.getTime() / 1000)
+      
+      let intervalSec = 0
+      if (frequency === 'WEEKLY') intervalSec = 7 * 24 * 60 * 60
+      if (frequency === 'MONTHLY') intervalSec = 30 * 24 * 60 * 60
+      
+      // Approve USDC for Scheduler
+      const approveAmount = intervalSec > 0 ? parseUnits('10000000', decimals) : BigInt(totalUnits) // Large approval for recurring
+      
+      showToast('Please approve USDC spend in your wallet...', 'warning')
+      await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [SCHEDULER_ADDRESS, approveAmount],
+      })
+      
+      showToast('USDC approved. Confirming schedule on-chain...', 'warning')
+      await new Promise(r => setTimeout(r, 4000))
+
+      await writeContractAsync({
+        address: SCHEDULER_ADDRESS,
+        abi: SCHEDULER_ABI,
+        functionName: 'createSchedule',
+        args: [scheduleId, addresses, amounts, memos, nextRunTime, intervalSec],
+      })
+
+      showToast('On-chain schedule active! Syncing to dashboard...', 'warning')
+
       // 1. Create schedule in database
       const res = await fetch(`${BACKEND_URL}/api/payouts/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: scheduleId,
           name: payoutName.trim(),
           description: payoutDesc ? payoutDesc.trim() : '',
           frequency,
@@ -295,7 +331,7 @@ export default function PayoutsPage() {
           totalAmount: totalUnits,
           nextRun: nextRunDate.toISOString(),
           ownerAddress: owner,
-          status: defaultStatus
+          status: 'Scheduled'
         })
       })
 
@@ -566,71 +602,29 @@ export default function PayoutsPage() {
   // Delete Schedule
   const deleteSchedule = async (id: string) => {
     try {
+      // First cancel on-chain
+      await writeContractAsync({
+        address: SCHEDULER_ADDRESS,
+        abi: SCHEDULER_ABI,
+        functionName: 'cancelSchedule',
+        args: [id],
+      })
+      
+      showToast('Schedule cancelled on-chain. Syncing...', 'warning')
+      await new Promise(r => setTimeout(r, 4000))
+
       const res = await fetch(`${BACKEND_URL}/api/payouts/schedule/${id}`, {
         method: 'DELETE'
       })
       if (!res.ok) throw new Error()
-      showToast('Scheduled payout cancelled.', 'success')
+      showToast('Scheduled payout cancelled successfully.', 'success')
       refetchSchedules()
     } catch {
       showToast('Failed to cancel schedule', 'error')
     }
   }
 
-  // Execute Scheduled Payout Manual Run (Frontend triggers wallet, then calls /run on backend)
-  const runScheduleNowOnchain = async (sch: ScheduledPayout) => {
-    if (!address) return
-    try {
-      const parsedRecipients: Recipient[] = JSON.parse(sch.recipients)
-      const total = parsedRecipients.reduce((sum, r) => sum + parseFloat(r.amount), 0)
-      
-      if (total > parseFloat(formattedBalance)) {
-        showToast('Insufficient USDC balance to execute this schedule', 'error')
-        return
-      }
-
-      showToast(`Executing payout "${sch.name}"...`, 'warning')
-
-      // Prepare lists
-      const totalUnits = parseUnits(total.toString(), decimals)
-      const addresses = parsedRecipients.map(r => r.address as `0x${string}`)
-      const amounts = parsedRecipients.map(r => parseUnits(r.amount, decimals))
-      const memos = parsedRecipients.map(r => r.memo || r.name || sch.name)
-
-      // Approve contract spend
-      const approveTx = await writeContractAsync({
-        address: USDC_ADDRESS,
-        abi: USDC_ABI,
-        functionName: 'approve',
-        args: [BULK_ROUTER_ADDRESS, totalUnits],
-      })
-
-      showToast('Spend approved! Triggering bulk transfer on-chain...', 'warning')
-      await new Promise(r => setTimeout(r, 4000))
-
-      const bulkTx = await writeContractAsync({
-        address: BULK_ROUTER_ADDRESS,
-        abi: BULK_ROUTER_ABI,
-        functionName: 'sendBulkPayment',
-        args: [addresses, amounts, memos],
-      })
-
-      showToast('Payment sent! Syncing schedule next run details with database...', 'success')
-      
-      // Update backend schedule execution state
-      const runRes = await fetch(`${BACKEND_URL}/api/payouts/schedule/${sch.id}/run`, {
-        method: 'POST'
-      })
-      
-      if (runRes.ok) {
-        refetchSchedules()
-        refetchBalance()
-      }
-    } catch (err) {
-      console.error(err)
-      showToast('Failed manual execution of schedule', 'error')
-    }
-  }
+  // Execute Scheduled Payout Manual Run removed because it is now automated by backend keeper
 
   // Pre-load some mock templates if user has no custom ones
   const displayedTemplates = templates.length > 0 ? templates : [
@@ -811,28 +805,6 @@ export default function PayoutsPage() {
                                   </div>
                                   <div style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700 }}>USDC</div>
                                 </div>
-
-                                <button
-                                  onClick={() => runScheduleNowOnchain(sch)}
-                                  style={{
-                                    background: 'var(--accent-glow)',
-                                    border: '1px solid var(--border-accent)',
-                                    borderRadius: '10px',
-                                    color: 'var(--accent)',
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                  onMouseOver={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.color = 'white' }}
-                                  onMouseOut={e => { e.currentTarget.style.background = 'var(--accent-glow)'; e.currentTarget.style.color = 'var(--accent)' }}
-                                >
-                                  <MdPlayArrow size={14} /> Run
-                                </button>
 
                                 <button
                                   onClick={() => deleteSchedule(sch.id)}

@@ -46,6 +46,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ArcPayRouter__factory>;
     getContractFactory(
+      name: "ArcPayScheduler",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ArcPayScheduler__factory>;
+    getContractFactory(
       name: "ArcPayUsernameRegistry",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ArcPayUsernameRegistry__factory>;
@@ -91,6 +95,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ArcPayRouter>;
     getContractAt(
+      name: "ArcPayScheduler",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ArcPayScheduler>;
+    getContractAt(
       name: "ArcPayUsernameRegistry",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -129,6 +138,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ArcPayRouter>;
     deployContract(
+      name: "ArcPayScheduler",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPayScheduler>;
+    deployContract(
       name: "ArcPayUsernameRegistry",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ArcPayUsernameRegistry>;
@@ -173,6 +186,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ArcPayRouter>;
+    deployContract(
+      name: "ArcPayScheduler",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPayScheduler>;
     deployContract(
       name: "ArcPayUsernameRegistry",
       args: any[],

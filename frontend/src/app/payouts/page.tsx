@@ -289,14 +289,14 @@ export default function PayoutsPage() {
       const amounts = recipients.map(r => parseUnits(r.amount, decimals))
       const memos = recipients.map(r => r.memo || r.name || '')
       
-      const nextRunTime = Math.floor(nextRunDate.getTime() / 1000)
+      const nextRunTime = BigInt(Math.floor(nextRunDate.getTime() / 1000))
       
-      let intervalSec = 0
-      if (frequency === 'WEEKLY') intervalSec = 7 * 24 * 60 * 60
-      if (frequency === 'MONTHLY') intervalSec = 30 * 24 * 60 * 60
+      let intervalSec = 0n
+      if (frequency === 'WEEKLY') intervalSec = BigInt(7 * 24 * 60 * 60)
+      if (frequency === 'MONTHLY') intervalSec = BigInt(30 * 24 * 60 * 60)
       
       // Approve USDC for Scheduler
-      const approveAmount = intervalSec > 0 ? parseUnits('10000000', decimals) : BigInt(totalUnits) // Large approval for recurring
+      const approveAmount = intervalSec > 0n ? parseUnits('10000000', decimals) : BigInt(totalUnits) // Large approval for recurring
       
       showToast('Please approve USDC spend in your wallet...', 'warning')
       await writeContractAsync({

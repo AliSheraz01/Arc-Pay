@@ -1,0 +1,72 @@
+'use client'
+
+import Link from 'next/link'
+import { LoginButton } from './LoginButton'
+import { NetworkSwitcher } from './NetworkSwitcher'
+import { FaucetModal } from '@/components/FaucetModal'
+export function Header() {
+
+  return (
+    <header style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+      background: 'var(--surface)',
+      borderBottom: '1px solid var(--border)',
+      padding: '0 24px',
+      height: '64px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }}>
+      {/* Left side: Network status on desktop, Logo on mobile */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        {/* Desktop: Network dropdown via RainbowKit (ConnectButton handles it natively when chainStatus="full") */}
+        <div className="header-desktop-status" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* We will let the right side ConnectButton handle network selection */}
+        </div>
+
+        {/* Mobile: Logo */}
+        <Link href="/" className="header-mobile-logo" style={{ textDecoration: 'none', display: 'none', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '32px', height: '32px',
+            background: 'var(--accent)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 16px var(--accent-glow)',
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4" strokeLinecap="round" fill="none" />
+            </svg>
+          </div>
+          <span style={{
+            fontWeight: 900,
+            fontSize: '18px',
+            color: 'var(--accent)',
+            letterSpacing: '-0.02em',
+          }}>
+            EasyZpay
+          </span>
+        </Link>
+      </div>
+
+      {/* Right — Faucet + Wallet */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <FaucetModal />
+        <NetworkSwitcher />
+        <LoginButton />
+      </div>
+
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .header-desktop-status {
+            display: none !important;
+          }
+          .header-mobile-logo {
+            display: flex !important;
+          }
+        }
+      `}</style>
+    </header>
+  )
+}

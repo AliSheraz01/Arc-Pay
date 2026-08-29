@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id               String          @id @default(uuid())
+  email            String?
+  address          String          @unique
+  username         String?         @unique
+  walletId         String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  socialAccounts   SocialAccount[]
+  crossPays        CrossPay[]
+  payoutBatches    PayoutBatch[]
+}
+
+model SocialAccount {
+  id             String   @id @default(uuid())
+  userId         String
+  provider       String   @default("x")
+  providerUserId String   // Immutable X User ID (e.g. "123456789")
+  username       String   // Current X handle e.g. "ali" or "ali_web3"
+  displayName    String?
+  avatar         String?
+  connectedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([username])
+}
+
+model CrossPay {
+  id                 String   @id @default(uuid())
+  userId             String?
+  sourceChain        Int      // chainId
+  destinationChain   Int      // chainId
+  amount             String
+  token              String   @default("USDC")
+  senderAddress      String
+  recipientAddress   String
+  recipientUsername  String?
+  status             String   @default("CREATED") // CREATED, VALIDATING, SOURCE_TRANSACTION_PENDING, SOURCE_CONFIRMED, ATTESTATION_PENDING, ATTESTATION_RECEIVED, DESTINATION_TRANSACTION_PENDING, COMPLETED, VALIDATION_FAILED, SOURCE_FAILED, ATTESTATION_FAILED, DESTINATION_FAILED, EXPIRED, CANCELLED, RECOVERY_REQUIRED
+  sourceTxHash       String?
+  destinationTxHash  String?
+  cctpMessageId      String?  @unique
+  attestationStatus  String?  // pending, complete, failed
+  attestationBytes   String?
+  errorReason        String?
+  retryCount         Int      @default(0)
+  idempotencyKey     String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User?    @relation(fields: [userId], references: [id])
+}
+
+model PayoutBatch {
+  id              String       @id @default(uuid())
+  userId          String?
+  senderAddress   String
+  totalAmount     String
+  token           String       @default("USDC")
+  sourceChain     Int
+  status          String       @default("DRAFT") // DRAFT, VALIDATING, READY, PROCESSING, PARTIALLY_COMPLETED, COMPLETED, FAILED, PARTIALLY_FAILED, CANCELLED
+  totalRecipients Int          @default(0)
+  completedCount  Int          @default(0)
+  failedCount     Int          @default(0)
+  idempotencyKey  String?      @unique
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  items           PayoutItem[]
+  user            User?        @relation(fields: [userId], references: [id])
+}
+
+model PayoutItem {
+  id                  String      @id @default(uuid())
+  batchId             String
+  recipientType       String      @default("wallet") // username, x, wallet
+  recipientIdentifier String
+  recipientAddress    String
+  amount              String
+  destinationChain    Int?
+  memo                String?
+  status              String      @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  sourceTxHash        String?
+  destinationTxHash   String?
+  cctpMessageId       String?
+  errorReason         String?
+  retryCount          Int         @default(0)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  batch               PayoutBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id                String   @id @default(uuid())
+  txHash            String
+  fromAddress       String
+  toAddress         String
+  amount            String
+  memo              String?
+  status            String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, RECOVERED
+  blockNumber       Int
+  sourceChain       Int?     // chainId
+  destinationChain  Int?     // chainId
+  recipientUsername String?
+  cctpMessageId     String?  @unique
+  timestamp         DateTime @default(now())
+}
+
+model PaymentRequest {
+  id          String   @id @default(uuid())
+  fromAddress String
+  toAddress   String?
+  amount      String
+  memo        String?
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+}
+
+model SyncState {
+  key   String @id
+  value String
+}
+
+model RecoveryRequest {
+  id            String   @id @default(uuid())
+  transactionId String   @unique
+  userAddress   String
+  amount        String
+  sourceChain   Int
+  destChain     Int
+  status        String   @default("PENDING") // PENDING, RECOVERED, FAILED
+  cctpMessageId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PayoutTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  recipients   String   // JSON string representing Recipient[]: { address: string, name?: string, amount: string }
+  totalAmount  String   // Total USDC in 6-decimal format (string)
+  ownerAddress String   // User who created the template
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ScheduledPayout {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  frequency    String   // MONTHLY, WEEKLY, ONE_TIME
+  recipients   String   // JSON string representing Recipient[]: { address: string, name?: string, amount: string }
+  totalAmount  String   // Total USDC in 6-decimal format (string)
+  nextRun      DateTime
+  status       String   @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED
+  ownerAddress String   // User who created the schedule
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+

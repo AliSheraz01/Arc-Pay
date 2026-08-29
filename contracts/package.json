@@ -1,0 +1,22 @@
+{
+  "name": "arcpay-contracts",
+  "version": "1.0.0",
+  "description": "ArcPay Smart Contracts",
+  "main": "index.js",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "deploy:arc": "npx hardhat run scripts/deploy.ts --network arc_testnet"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

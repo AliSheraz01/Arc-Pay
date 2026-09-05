@@ -24,9 +24,16 @@ interface Transaction {
   fromAddress: string
   toAddress: string
   amount: string
+  token?: string
+  chainId?: number
   memo?: string
   status: string
+  type?: string
+  recipientUsername?: string
+  recipientXUsername?: string
+  explorerUrl?: string
   timestamp: string
+  confirmedAt?: string
 }
 
 export default function ActivityPage() {
@@ -232,8 +239,8 @@ export default function ActivityPage() {
                             </span>
                             <span style={{ 
                               fontSize: '10px', 
-                              background: tx.status === 'COMPLETED' ? 'var(--green-glow)' : 'var(--border)', 
-                              color: tx.status === 'COMPLETED' ? 'var(--green)' : 'var(--text-secondary)',
+                              background: (tx.status === 'COMPLETED' || tx.status === 'CONFIRMED') ? 'var(--green-glow)' : tx.status === 'FAILED' ? 'rgba(255,68,102,0.1)' : 'var(--border)', 
+                              color: (tx.status === 'COMPLETED' || tx.status === 'CONFIRMED') ? 'var(--green)' : tx.status === 'FAILED' ? 'var(--red)' : 'var(--text-secondary)',
                               padding: '2px 6px',
                               borderRadius: '4px',
                               fontWeight: 700,
@@ -270,7 +277,7 @@ export default function ActivityPage() {
                               <span>{date}</span>
                             </div>
                             <a
-                              href={`${EXPLORER_URL}/tx/${tx.txHash}`}
+                              href={tx.explorerUrl || `${EXPLORER_URL}/tx/${tx.txHash}`}
                               target="_blank"
                               rel="noreferrer"
                               style={{

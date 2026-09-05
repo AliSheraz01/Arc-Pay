@@ -147,47 +147,22 @@ export default function ProfilePage() {
   }, [address, fetchXStatus])
 
   const handleConnectX = async () => {
-    if (!xHandleInput.trim() || !address) {
-      setXError('Please enter your X username handle.')
-      return
-    }
+    if (!address) return
     setXConnecting(true)
     setXError('')
-    const handle = xHandleInput.trim().replace('@', '')
-    const displayName = xDisplayNameInput.trim() || `@${handle}`
-    const localAcc = {
-      connected: true,
-      username: handle,
-      displayName,
-    }
-
     try {
-      const res = await fetch(`${BACKEND_URL}/api/social/x/connect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address,
-          xUserId: `x_${handle.toLowerCase()}`,
-          username: handle,
-          displayName,
-        }),
-      })
+      const res = await fetch(`${BACKEND_URL}/api/social/x/auth?address=${address}`)
       if (res.ok) {
         const data = await res.json()
-        if (data.success) {
-          setShowConnectXModal(false)
-          fetchXStatus(address)
+        if (data.url) {
+          window.location.href = data.url
           return
         }
       }
+      setXError('Failed to initialize official X OAuth.')
     } catch (err: any) {
-      console.warn('Backend connection failed, saving locally:', err)
+      setXError('Network error starting X OAuth')
     }
-
-    // Graceful fallback: save locally so user is never blocked
-    localStorage.setItem(`easyzpay_x_${address.toLowerCase()}`, JSON.stringify(localAcc))
-    setXAccount(localAcc)
-    setShowConnectXModal(false)
     setXConnecting(false)
   }
 

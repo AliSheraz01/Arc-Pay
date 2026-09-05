@@ -263,57 +263,85 @@ app.get('/api/crosspay/active/:address', async (req, res) => {
 // 3. X SOCIAL IDENTITY & USERNAME PAYMENTS
 // ==========================================
 
-// Connect X account (OAuth 2.0 or verified testnet connection)
-app.post('/api/social/x/connect', async (req, res) => {
+// ==========================================
+// X OAUTH 2.0 ROUTES
+// ==========================================
+app.get('/api/social/x/auth', (req, res) => {
+  const { address } = req.query;
+  if (!address) return res.status(400).json({ error: 'Address required' });
+  
+  const clientId = process.env.X_CLIENT_ID || 'default_client_id';
+  const redirectUri = process.env.X_REDIRECT_URI || 'http://localhost:3001/api/social/x/callback';
+  const state = Buffer.from(JSON.stringify({ address })).toString('base64');
+  const authUrl = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=tweet.read%20users.read&state=${state}&code_challenge=challenge&code_challenge_method=plain`;
+  res.json({ url: authUrl });
+});
+
+app.get('/api/social/x/callback', async (req, res) => {
   try {
-    const { address, username, displayName, avatar, providerUserId } = req.body;
+    const { code, state } = req.query;
+    if (!code || !state) return res.status(400).send('Missing code or state');
+    
+    const { address } = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
+    
+    const clientId = process.env.X_CLIENT_ID;
+    const clientSecret = process.env.X_CLIENT_SECRET;
+    const redirectUri = process.env.X_REDIRECT_URI || 'http://localhost:3001/api/social/x/callback';
+    
+    let providerUserId = '';
+    let xUsername = '';
+    let displayName = '';
+    let avatar = '';
 
-    if (!address || !username) {
-      return res.status(400).json({ error: 'Address and X username are required.' });
-    }
-
-    const addrLower = address.toLowerCase();
-    const cleanUsername = username.replace('@', '').trim().toLowerCase();
-    const xUserId = providerUserId ? providerUserId.toString() : `x_uid_${cleanUsername}`;
-
-    // 1. Ensure user exists
-    let user = await prisma.user.findUnique({
-      where: { address: addrLower },
-    });
-    if (!user) {
-      user = await prisma.user.create({
-        data: { address: addrLower },
-      });
-    }
-
-    // 2. Link or update SocialAccount using immutable providerUserId
-    const socialAccount = await prisma.socialAccount.upsert({
-      where: {
-        provider_providerUserId: {
-          provider: 'x',
-          providerUserId: xUserId,
+    if (clientSecret) {
+      const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
         },
-      },
-      update: {
-        username: cleanUsername,
-        displayName: displayName || username,
-        avatar: avatar || null,
-        userId: user.id,
-      },
-      create: {
-        userId: user.id,
-        provider: 'x',
-        providerUserId: xUserId,
-        username: cleanUsername,
-        displayName: displayName || username,
-        avatar: avatar || null,
-      },
+        body: new URLSearchParams({
+          code: code as string,
+          grant_type: 'authorization_code',
+          client_id: clientId as string,
+          redirect_uri: redirectUri,
+          code_verifier: 'challenge'
+        })
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) throw new Error('Failed to get access token');
+
+      const userRes = await fetch('https://api.twitter.com/2/users/me?user.fields=profile_image_url', {
+        headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+      });
+      const userData = await userRes.json();
+      providerUserId = userData.data.id;
+      xUsername = userData.data.username;
+      displayName = userData.data.name;
+      avatar = userData.data.profile_image_url;
+    } else {
+      xUsername = 'testuser' + Math.floor(Math.random() * 1000);
+      providerUserId = 'mock_' + xUsername;
+      displayName = 'Test User';
+      avatar = 'https://unavatar.io/twitter/jack';
+    }
+
+    const user = await prisma.user.upsert({
+      where: { address: address.toLowerCase() },
+      update: {},
+      create: { address: address.toLowerCase() }
     });
 
-    res.json({ success: true, socialAccount });
-  } catch (error: any) {
-    console.error('[X Connect] Error:', error);
-    res.status(500).json({ error: 'Failed to connect X account' });
+    await prisma.socialAccount.upsert({
+      where: { provider_providerUserId: { provider: 'x', providerUserId } },
+      update: { userId: user.id, username: xUsername.toLowerCase(), displayName, avatar },
+      create: { userId: user.id, provider: 'x', providerUserId, username: xUsername.toLowerCase(), displayName, avatar }
+    });
+
+    res.redirect('http://localhost:3000/profile?x_connected=true');
+  } catch (error) {
+    console.error('X OAuth callback error:', error);
+    res.redirect('http://localhost:3000/profile?x_error=true');
   }
 });
 
@@ -897,7 +925,15 @@ app.get('/api/transactions/:address', async (req, res) => {
       take: 50
     });
     
-    res.json(transactions);
+    const enriched = transactions.map((tx: any) => ({
+      ...tx,
+      explorerUrl: tx.explorerUrl || `https://testnet.arcscan.app/tx/${tx.txHash}`,
+      type: tx.type || 'SEND',
+      token: tx.token || 'USDC',
+      chainId: tx.chainId || 5042002,
+    }));
+    
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -1125,9 +1161,14 @@ async function indexPayments(fromBlock: bigint, toBlock: bigint) {
             toAddress,
             amount,
             memo,
-            status: 'COMPLETED',
+            token: 'USDC',
+            chainId: 5042002,
+            type: 'SEND',
+            status: 'CONFIRMED',
             blockNumber: Number(blockNumber),
-            timestamp
+            explorerUrl: `https://testnet.arcscan.app/tx/${transactionHash}`,
+            timestamp,
+            confirmedAt: timestamp
           }
         });
       }
@@ -1294,6 +1335,107 @@ function startSchedulerCron() {
     }
   });
 }
+
+// ==========================================
+// PARTY ROUTES
+// ==========================================
+app.post('/api/party', async (req, res) => {
+  try {
+    const { name, creatorAddress, splitType, totalAmount, participants } = req.body;
+    if (!name || !creatorAddress || !totalAmount || !participants?.length) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const party = await prisma.party.create({
+      data: {
+        name, creatorAddress: creatorAddress.toLowerCase(), splitType: splitType || 'equal',
+        totalAmount, status: 'ACTIVE',
+        participants: { create: participants.map((p: any) => ({ identifier: p.identifier, resolvedAddress: p.resolvedAddress || null, amount: p.amount, status: 'PENDING' })) }
+      },
+      include: { participants: true }
+    });
+    res.json(party);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/party/:id', async (req, res) => {
+  try {
+    const party = await prisma.party.findUnique({ where: { id: req.params.id }, include: { participants: true } });
+    if (!party) return res.status(404).json({ error: 'Not found' });
+    res.json(party);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/party/user/:address', async (req, res) => {
+  try {
+    const parties = await prisma.party.findMany({ where: { creatorAddress: req.params.address.toLowerCase() }, include: { participants: true }, orderBy: { createdAt: 'desc' } });
+    res.json(parties);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/party/:id/pay', async (req, res) => {
+  try {
+    const { participantId, txHash } = req.body;
+    const updated = await prisma.partyParticipant.update({ where: { id: participantId }, data: { status: 'PAID', txHash } });
+    const allParts = await prisma.partyParticipant.findMany({ where: { partyId: req.params.id } });
+    if (allParts.every((p: any) => p.status === 'PAID')) {
+      await prisma.party.update({ where: { id: req.params.id }, data: { status: 'COMPLETED' } });
+    }
+    res.json(updated);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ==========================================
+// BOUNTY ROUTES
+// ==========================================
+app.post('/api/bounties', async (req, res) => {
+  try {
+    const { title, description, creatorAddress, prizeAmount } = req.body;
+    if (!title || !creatorAddress || !prizeAmount) return res.status(400).json({ error: 'Missing fields' });
+    const bounty = await prisma.bounty.create({ data: { title, description, creatorAddress: creatorAddress.toLowerCase(), prizeAmount, status: 'OPEN' } });
+    res.json(bounty);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bounties', async (req, res) => {
+  try {
+    const bounties = await prisma.bounty.findMany({ include: { submissions: true }, orderBy: { createdAt: 'desc' } });
+    res.json(bounties);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/bounties/:id', async (req, res) => {
+  try {
+    const bounty = await prisma.bounty.findUnique({ where: { id: req.params.id }, include: { submissions: true } });
+    if (!bounty) return res.status(404).json({ error: 'Not found' });
+    res.json(bounty);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bounties/:id/fund', async (req, res) => {
+  try {
+    const { txHash } = req.body;
+    const bounty = await prisma.bounty.update({ where: { id: req.params.id }, data: { fundTxHash: txHash } });
+    res.json(bounty);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bounties/:id/submit', async (req, res) => {
+  try {
+    const { submitterAddress, content } = req.body;
+    if (!submitterAddress || !content) return res.status(400).json({ error: 'Missing fields' });
+    const sub = await prisma.bountySubmission.create({ data: { bountyId: req.params.id, submitterAddress: submitterAddress.toLowerCase(), content } });
+    res.json(sub);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/bounties/:id/select-winner', async (req, res) => {
+  try {
+    const { submissionId, rewardAmount, rewardTxHash } = req.body;
+    await prisma.bountySubmission.update({ where: { id: submissionId }, data: { status: 'WINNER', rewardAmount, rewardTxHash } });
+    await prisma.bounty.update({ where: { id: req.params.id }, data: { status: 'COMPLETED' } });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
 
 // Start Server
 app.listen(PORT, () => {

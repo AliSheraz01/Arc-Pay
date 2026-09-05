@@ -66,13 +66,11 @@ export function Sidebar() {
   const navItems = [
     { href: '/', label: 'Home', icon: MdHome },
     { href: '/send', label: 'Send', icon: MdSend },
+    { href: '/party', label: 'Party', icon: MdPerson },
+    { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
-    { href: '/cross-pay', label: 'Cross Pay', icon: MdAutoAwesome },
-    { href: '/payouts', label: 'Payouts', icon: PayoutsIcon },
-    { href: '/receive?tab=request', label: 'Payment Links', icon: MdLink },
     { href: '/activity', label: 'Activity', icon: MdHistory },
     { href: '/profile', label: 'Profile', icon: MdPerson },
-    { href: '/agent', label: 'AI Pay', icon: MdAutoAwesome },
     { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
 
@@ -301,7 +299,7 @@ export function Sidebar() {
 
       {/* Mobile Tab Bottom Navigation */}
       <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
-        {navItems.filter(item => ['Home', 'Send', 'Receive', 'Payouts', 'Activity', 'Settings'].includes(item.label)).map(item => {
+        {navItems.filter(item => ['Home', 'Send', 'Receive', 'Activity', 'Settings'].includes(item.label)).map(item => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (

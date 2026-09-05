@@ -20,6 +20,8 @@ model User {
   socialAccounts   SocialAccount[]
   crossPays        CrossPay[]
   payoutBatches    PayoutBatch[]
+
+  @@index([address])
 }
 
 model SocialAccount {
@@ -36,6 +38,7 @@ model SocialAccount {
 
   @@unique([provider, providerUserId])
   @@index([username])
+  @@index([provider, username])
 }
 
 model CrossPay {
@@ -106,14 +109,83 @@ model Transaction {
   fromAddress       String
   toAddress         String
   amount            String
+  token             String   @default("USDC")
+  chainId           Int      @default(5042002)
   memo              String?
-  status            String   @default("COMPLETED") // PENDING, COMPLETED, FAILED, RECOVERED
+  status            String   @default("COMPLETED") // PENDING, SUBMITTED, CONFIRMED, FAILED
+  type              String   @default("SEND") // SEND, RECEIVE, PARTY, BOUNTY, REQUEST
   blockNumber       Int
-  sourceChain       Int?     // chainId
-  destinationChain  Int?     // chainId
-  recipientUsername String?
+  sourceChain       Int?
+  destinationChain  Int?
+  senderUserId      String?
+  recipientUserId   String?
+  recipientUsername  String?
+  recipientXUsername String?
   cctpMessageId     String?  @unique
+  explorerUrl       String?
   timestamp         DateTime @default(now())
+  confirmedAt       DateTime?
+
+  @@index([txHash])
+  @@index([fromAddress])
+  @@index([toAddress])
+  @@index([timestamp])
+  @@index([status])
+}
+
+model Party {
+  id             String   @id @default(uuid())
+  name           String
+  creatorAddress String
+  splitType      String   @default("equal") // equal, custom, percentage
+  totalAmount    String
+  token          String   @default("USDC")
+  chainId        Int      @default(5042002)
+  status         String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  participants   PartyParticipant[]
+}
+
+model PartyParticipant {
+  id              String   @id @default(uuid())
+  partyId         String
+  identifier      String
+  resolvedAddress String?
+  amount          String
+  status          String   @default("PENDING") // PENDING, PAID, FAILED
+  txHash          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  party           Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+}
+
+model Bounty {
+  id             String   @id @default(uuid())
+  title          String
+  description    String?
+  creatorAddress String
+  prizeAmount    String
+  token          String   @default("USDC")
+  chainId        Int      @default(5042002)
+  status         String   @default("OPEN") // OPEN, REVIEWING, COMPLETED, CANCELLED
+  fundTxHash     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  submissions    BountySubmission[]
+}
+
+model BountySubmission {
+  id               String   @id @default(uuid())
+  bountyId         String
+  submitterAddress String
+  content          String
+  status           String   @default("PENDING") // PENDING, WINNER, REJECTED
+  rewardAmount     String?
+  rewardTxHash     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  bounty           Bounty   @relation(fields: [bountyId], references: [id], onDelete: Cascade)
 }
 
 model PaymentRequest {

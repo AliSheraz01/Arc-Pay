@@ -58,103 +58,40 @@ function SendForm() {
 
     if (!value) return
     const clean = value.trim()
-
-    // 1. Direct address mode
-    if (mode === 'address' || isAddress(clean)) {
-      if (isAddress(clean)) {
-        setResolvedAddress(clean as `0x${string}`)
-      } else {
-        setResolveError('Invalid EVM wallet address format.')
-      }
-      return
+    
+    // Auto-detect mode if not explicitly set correctly or append prefix for backend
+    let identifier = clean;
+    if (mode === 'x' && !identifier.startsWith('x:')) {
+      identifier = 'x:' + identifier.replace('@', '');
+    } else if (mode === 'easyzpay' && !identifier.startsWith('@') && !identifier.startsWith('0x')) {
+      identifier = '@' + identifier;
     }
-
-    // 2. X Username mode
-    if (mode === 'x') {
-      const handle = clean.replace('@', '').toLowerCase()
-      if (!handle) return
-      setResolving(true)
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/resolve/x/${handle}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.connected && data.address) {
-            setResolvedAddress(data.address as `0x${string}`)
-            setXProfileData({
-              username: data.username,
-              displayName: data.displayName,
-              avatar: data.avatar,
-            })
-            setResolving(false)
-            return
-          }
-        }
-      } catch {}
-
-      // Fallback to local storage check
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (key && key.startsWith('easyzpay_x_')) {
-            const raw = localStorage.getItem(key)
-            if (raw) {
-              const acc = JSON.parse(raw)
-              if (acc.username?.toLowerCase() === handle) {
-                const addr = key.replace('easyzpay_x_', '') as `0x${string}`
-                setResolvedAddress(addr)
-                setXProfileData({
-                  username: acc.username,
-                  displayName: acc.displayName || `@${acc.username}`,
-                })
-                setResolving(false)
-                return
-              }
-            }
-          }
-        }
-      } catch {}
-
-      setUnconnectedXUser(handle)
-      setResolving(false)
-      return
-    }
-
-    // 3. EasyZPay username mode
-    const username = clean.replace('@', '').toLowerCase()
-    if (!username) return
 
     setResolving(true)
     try {
-      const res = await fetch(`${BACKEND_URL}/api/resolve/${username}`)
+      const res = await fetch(`${BACKEND_URL}/api/resolve/${encodeURIComponent(identifier)}`)
       if (res.ok) {
         const data = await res.json()
-        if (data.address) {
-          setResolvedAddress(data.address as `0x${string}`)
-          return
+        if (data.found) {
+          if (data.registered && data.walletAddress) {
+            setResolvedAddress(data.walletAddress as `0x${string}`)
+            if (data.xUsername) {
+              setXProfileData({
+                username: data.xUsername,
+                displayName: data.displayName,
+                avatar: data.avatar,
+              })
+            }
+            return
+          } else if (data.type === 'x' && !data.registered) {
+            setUnconnectedXUser(data.xUsername)
+            return
+          }
         }
       }
-      throw new Error('backend failed')
-    } catch {
-      try {
-        const client = createPublicClient({
-          chain: arcTestnet,
-          transport: http('https://rpc.testnet.arc.network'),
-        })
-        const resolved = await client.readContract({
-          address: REGISTRY_ADDRESS,
-          abi: REGISTRY_ABI,
-          functionName: 'resolveUsername',
-          args: [username],
-        }) as `0x${string}`
-
-        if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
-          setResolvedAddress(resolved)
-          return
-        }
-      } catch (onChainErr) {
-        console.error('On-chain resolve failed:', onChainErr)
-      }
-      setResolveError(`Could not find user "@${username}"`)
+      setResolveError(`Could not resolve recipient: ${clean}`)
+    } catch (e) {
+      setResolveError('Network error while resolving recipient')
     } finally {
       setResolving(false)
     }

@@ -491,6 +491,45 @@
       "artifacts": [
         "ArcPayScheduler"
       ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\BountyEscrow.sol": {
+      "lastModificationDate": 1788683672930,
+      "contentHash": "e5397789a0da677e766821b128fda078",
+      "sourceName": "contracts/BountyEscrow.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "BountyEscrow"
+      ]
     }
   }
 }

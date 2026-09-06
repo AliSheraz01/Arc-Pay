@@ -53,6 +53,10 @@ declare module "hardhat/types/runtime" {
       name: "ArcPayUsernameRegistry",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ArcPayUsernameRegistry__factory>;
+    getContractFactory(
+      name: "BountyEscrow",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.BountyEscrow__factory>;
 
     getContractAt(
       name: "Ownable",
@@ -104,6 +108,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ArcPayUsernameRegistry>;
+    getContractAt(
+      name: "BountyEscrow",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.BountyEscrow>;
 
     deployContract(
       name: "Ownable",
@@ -145,6 +154,10 @@ declare module "hardhat/types/runtime" {
       name: "ArcPayUsernameRegistry",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ArcPayUsernameRegistry>;
+    deployContract(
+      name: "BountyEscrow",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BountyEscrow>;
 
     deployContract(
       name: "Ownable",
@@ -196,6 +209,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ArcPayUsernameRegistry>;
+    deployContract(
+      name: "BountyEscrow",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BountyEscrow>;
 
     // default types
     getContractFactory(

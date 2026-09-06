@@ -5,3 +5,4 @@ export type { ArcPayBulkRouter } from "./ArcPayBulkRouter";
 export type { ArcPayRouter } from "./ArcPayRouter";
 export type { ArcPayScheduler } from "./ArcPayScheduler";
 export type { ArcPayUsernameRegistry } from "./ArcPayUsernameRegistry";
+export type { BountyEscrow } from "./BountyEscrow";

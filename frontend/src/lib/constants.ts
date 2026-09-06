@@ -53,6 +53,8 @@ export const BULK_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_BULK_ROUTER_ADDRESS 
 
 export const SCHEDULER_ADDRESS = (process.env.NEXT_PUBLIC_SCHEDULER_ADDRESS ?? '0xb10F4e8646dEf105B1083540F13AB1ef73968fa1') as `0x${string}`
 
+export const BOUNTY_ESCROW_ADDRESS = (process.env.NEXT_PUBLIC_BOUNTY_ESCROW_ADDRESS ?? '0xD04B51102621E1825E317471d7D6A0e183C9CC71') as `0x${string}`
+
 export const EXPLORER_URL = 'https://testnet.arcscan.app'
 
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''

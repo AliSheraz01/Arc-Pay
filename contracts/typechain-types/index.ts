@@ -26,3 +26,5 @@ export type { ArcPayScheduler } from "./contracts/ArcPayScheduler";
 export { ArcPayScheduler__factory } from "./factories/contracts/ArcPayScheduler__factory";
 export type { ArcPayUsernameRegistry } from "./contracts/ArcPayUsernameRegistry";
 export { ArcPayUsernameRegistry__factory } from "./factories/contracts/ArcPayUsernameRegistry__factory";
+export type { BountyEscrow } from "./contracts/BountyEscrow";
+export { BountyEscrow__factory } from "./factories/contracts/BountyEscrow__factory";

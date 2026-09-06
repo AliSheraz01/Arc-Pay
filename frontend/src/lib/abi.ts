@@ -203,3 +203,57 @@ export const SCHEDULER_ABI = [
     outputs: [],
   }
 ] as const
+
+// ABI for BountyEscrow — holds bounty prize USDC in escrow, releases to winner
+export const BOUNTY_ESCROW_ABI = [
+  {
+    name: 'depositBounty',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'releasePrize',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32' },
+      { name: 'winner', type: 'address' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'getBounty',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'bountyId', type: 'bytes32' }],
+    outputs: [
+      { name: 'creator', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'funded', type: 'bool' },
+      { name: 'paid', type: 'bool' },
+    ],
+  },
+  {
+    name: 'BountyFunded',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'PrizeReleased',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'winner', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+] as const

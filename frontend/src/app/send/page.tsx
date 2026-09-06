@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect, Suspense } from 'react'
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, useSendTransaction } from 'wagmi'
-import { parseUnits, parseEther, isAddress, createPublicClient, http } from 'viem'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
 import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL, arcTestnet } from '@/lib/constants'
@@ -31,24 +31,14 @@ function SendForm() {
   const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
   const [sendTxHash, setSendTxHash] = useState<`0x${string}` | undefined>()
   const [phase, setPhase] = useState<'idle' | 'approving' | 'sending'>('idle')
-  const [sendError, setSendError] = useState('')
 
   const { writeContractAsync } = useWriteContract()
-  const { sendTransactionAsync } = useSendTransaction()
 
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS,
     abi: USDC_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
-  })
-
-  const { data: currentAllowance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: USDC_ABI,
-    functionName: 'allowance',
-    args: address && ROUTER_ADDRESS ? [address, ROUTER_ADDRESS] : undefined,
     query: { enabled: !!address },
   })
 
@@ -190,97 +180,37 @@ function SendForm() {
   }, [searchParams, resolveRecipient])
 
   async function handleSend() {
-    if (!resolvedAddress || !isValidAmount || !address) return
-    setSendError('')
+    if (!resolvedAddress || !isValidAmount) return
     setPhase('approving')
 
     try {
       const parsedAmount = parseUnits(amount, 6)
-      let sendTx: `0x${string}` | undefined
 
-      // 1. Check existing allowance for ArcPayRouter
-      const allowanceBig = currentAllowance ? BigInt(currentAllowance.toString()) : 0n
-      let routerReady = allowanceBig >= parsedAmount
+      // 1. Approve Router to spend USDC
+      const approveTx = await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'approve',
+        args: [ROUTER_ADDRESS, parsedAmount],
+      })
+      setApproveTxHash(approveTx)
 
-      if (!routerReady) {
-        try {
-          const approveTx = await writeContractAsync({
-            address: USDC_ADDRESS,
-            abi: USDC_ABI,
-            functionName: 'approve',
-            args: [ROUTER_ADDRESS, parsedAmount],
-          })
-          setApproveTxHash(approveTx)
-          await new Promise(r => setTimeout(r, 2500))
-          routerReady = true
-        } catch (approveErr: any) {
-          console.warn('[Send] Router approve reverted or skipped, falling back to direct transfer:', approveErr)
-        }
-      }
+      // Wait briefly for approval
+      await new Promise(r => setTimeout(r, 3000))
 
       setPhase('sending')
 
-      // 2. Try router sendPayment first
-      if (routerReady) {
-        try {
-          sendTx = await writeContractAsync({
-            address: ROUTER_ADDRESS,
-            abi: ROUTER_ABI,
-            functionName: 'sendPayment',
-            args: [resolvedAddress, parsedAmount, memo || ''],
-          })
-        } catch (routerErr: any) {
-          console.warn('[Send] Router sendPayment failed, falling back to direct transfer:', routerErr)
-        }
-      }
-
-      // 3. Fallback: Direct USDC transfer (native on Arc or ERC20 transfer)
-      if (!sendTx) {
-        try {
-          // Direct ERC-20 transfer on USDC token
-          sendTx = await writeContractAsync({
-            address: USDC_ADDRESS,
-            abi: USDC_ABI,
-            functionName: 'transfer',
-            args: [resolvedAddress, parsedAmount],
-          })
-        } catch (erc20Err: any) {
-          console.warn('[Send] Direct ERC-20 transfer failed, executing native gas transfer:', erc20Err)
-          // Direct native gas transfer on Arc (native currency is USDC with 18 decimals)
-          sendTx = await sendTransactionAsync({
-            to: resolvedAddress,
-            value: parseEther(amount),
-          })
-        }
-      }
-
-      if (sendTx) {
-        setSendTxHash(sendTx)
-        setStep('success')
-
-        // Index in activity immediately
-        fetch(`${BACKEND_URL}/api/transactions/${address}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            txHash: sendTx,
-            fromAddress: address,
-            toAddress: resolvedAddress,
-            amount: parsedAmount.toString(),
-            memo: memo || '',
-            status: 'CONFIRMED',
-            type: 'SEND',
-            token: 'USDC',
-            chainId: 5042002,
-          }),
-        }).catch(() => {})
-      } else {
-        throw new Error('Transaction was not submitted.')
-      }
-    } catch (err: any) {
-      console.error('[Send] Payment failed:', err)
-      setSendError(err?.shortMessage || err?.message || 'Payment transaction failed. Please try again.')
-    } finally {
+      // 2. Send via Router contract
+      const sendTx = await writeContractAsync({
+        address: ROUTER_ADDRESS,
+        abi: ROUTER_ABI,
+        functionName: 'sendPayment',
+        args: [resolvedAddress, parsedAmount, memo],
+      })
+      setSendTxHash(sendTx)
+      setStep('success')
+    } catch (err) {
+      console.error('Payment failed:', err)
       setPhase('idle')
     }
   }
@@ -562,14 +492,6 @@ function SendForm() {
                   <p style={{ color: 'var(--green)', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                     <MdAccessTime size={14} className="shimmer-rotate" />
                     <span>{waitingSend ? 'Confirming payment on Arc...' : 'Submitting payment transaction...'}</span>
-                  </p>
-                </div>
-              )}
-
-              {sendError && (
-                <div style={{ background: 'rgba(255,0,0,0.08)', border: '1px solid rgba(255,0,0,0.2)', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
-                  <p style={{ color: 'var(--red)', fontSize: '13px', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <MdErrorOutline size={16} /> {sendError}
                   </p>
                 </div>
               )}

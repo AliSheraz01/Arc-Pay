@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, isAddress, createPublicClient, http } from 'viem'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSendTransaction } from 'wagmi'
+import { parseUnits, parseEther, isAddress, createPublicClient, http } from 'viem'
 import Link from 'next/link'
 import { MdGroup, MdAdd, MdCheckCircle, MdErrorOutline, MdAccessTime, MdSend } from 'react-icons/md'
 import { PageLayout } from '@/components/PageLayout'
@@ -30,6 +30,7 @@ export default function PartyPage() {
   const [payingId, setPayingId] = useState<string | null>(null)
 
   const { writeContractAsync } = useWriteContract()
+  const { sendTransactionAsync } = useSendTransaction()
 
   const fetchParties = useCallback(async () => {
     let list: any[] = []
@@ -226,17 +227,51 @@ export default function PartyPage() {
   const payParticipant = async (party: any, participant: any) => {
     if (!address || !participant.resolvedAddress) return
     setPayingId(participant.id)
+    setError('')
     try {
       const amountWei = parseUnits(participant.amount, 6)
-      const approveHash = await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
-      const sendHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [participant.resolvedAddress, amountWei, `Party: ${party.name}`] })
-      await fetch(`${BACKEND_URL}/api/party/${party.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ participantId: participant.id, txHash: sendHash }) })
-      await fetchParties()
-      if (selectedParty) {
-        const r = await fetch(`${BACKEND_URL}/api/party/${party.id}`)
-        if (r.ok) setSelectedParty(await r.json())
+      let sendHash: `0x${string}` | undefined
+
+      // 1. Try Payment Router
+      try {
+        await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
+        sendHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [participant.resolvedAddress as `0x${string}`, amountWei, `Party: ${party.name}`] })
+      } catch (routerErr) {
+        console.warn('[Party] Router payment failed, falling back to direct transfer:', routerErr)
       }
-    } catch (e: any) { setError(e.message || 'Payment failed') }
+
+      // 2. Direct transfer fallback
+      if (!sendHash) {
+        try {
+          sendHash = await writeContractAsync({
+            address: USDC_ADDRESS as `0x${string}`,
+            abi: USDC_ABI,
+            functionName: 'transfer',
+            args: [participant.resolvedAddress as `0x${string}`, amountWei],
+          })
+        } catch (ercErr) {
+          sendHash = await sendTransactionAsync({
+            to: participant.resolvedAddress as `0x${string}`,
+            value: parseEther(participant.amount),
+          })
+        }
+      }
+
+      if (sendHash) {
+        await fetch(`${BACKEND_URL}/api/party/${party.id}/pay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participantId: participant.id, txHash: sendHash }),
+        })
+        await fetchParties()
+        if (selectedParty) {
+          const r = await fetch(`${BACKEND_URL}/api/party/${party.id}`)
+          if (r.ok) setSelectedParty(await r.json())
+        }
+      }
+    } catch (e: any) {
+      setError(e?.shortMessage || e?.message || 'Payment failed')
+    }
     setPayingId(null)
   }
 

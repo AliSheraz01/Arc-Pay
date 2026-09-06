@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useAccount, useWriteContract } from 'wagmi'
-import { parseUnits } from 'viem'
+import { useAccount, useWriteContract, useSendTransaction } from 'wagmi'
+import { parseUnits, parseEther } from 'viem'
 import { MdEmojiEvents, MdAdd, MdCheckCircle, MdAccessTime, MdSend, MdErrorOutline } from 'react-icons/md'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
@@ -27,6 +27,7 @@ export default function BountiesPage() {
   const [selectingWinner, setSelectingWinner] = useState<string | null>(null)
 
   const { writeContractAsync } = useWriteContract()
+  const { sendTransactionAsync } = useSendTransaction()
 
   const fetchBounties = useCallback(async () => {
     let list: any[] = []
@@ -127,13 +128,39 @@ export default function BountiesPage() {
   const fundBounty = async () => {
     if (!selected || !address) return
     setFunding(true)
+    setError('')
     try {
       const amountWei = parseUnits(selected.prizeAmount, 6)
-      const approveHash = await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
-      const txHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [ROUTER_ADDRESS, amountWei, `Bounty: ${selected.title}`] })
-      await fetch(`${BACKEND_URL}/api/bounties/${selected.id}/fund`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txHash }) })
-      await fetchBounty(selected.id)
-    } catch (e: any) { setError(e.message || 'Funding failed') }
+      let txHash: `0x${string}` | undefined
+
+      try {
+        await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
+        txHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [ROUTER_ADDRESS, amountWei, `Bounty: ${selected.title}`] })
+      } catch (routerErr) {
+        console.warn('[Bounty] Router funding failed, using direct transfer:', routerErr)
+      }
+
+      if (!txHash) {
+        try {
+          txHash = await writeContractAsync({
+            address: USDC_ADDRESS as `0x${string}`,
+            abi: USDC_ABI,
+            functionName: 'transfer',
+            args: [ROUTER_ADDRESS, amountWei],
+          })
+        } catch {
+          txHash = await sendTransactionAsync({
+            to: ROUTER_ADDRESS,
+            value: parseEther(selected.prizeAmount),
+          })
+        }
+      }
+
+      if (txHash) {
+        await fetch(`${BACKEND_URL}/api/bounties/${selected.id}/fund`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ txHash }) })
+        await fetchBounty(selected.id)
+      }
+    } catch (e: any) { setError(e?.shortMessage || e?.message || 'Funding failed') }
     setFunding(false)
   }
 
@@ -151,14 +178,40 @@ export default function BountiesPage() {
   const selectWinner = async (submissionId: string, submitterAddress: string) => {
     if (!selected || !address) return
     setSelectingWinner(submissionId)
+    setError('')
     try {
       const amountWei = parseUnits(selected.prizeAmount, 6)
-      const approveHash = await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
-      const txHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [submitterAddress as `0x${string}`, amountWei, `Bounty Winner: ${selected.title}`] })
-      await fetch(`${BACKEND_URL}/api/bounties/${selected.id}/select-winner`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ submissionId, rewardAmount: selected.prizeAmount, rewardTxHash: txHash }) })
-      await fetchBounty(selected.id)
-      await fetchBounties()
-    } catch (e: any) { setError(e.message || 'Failed to select winner') }
+      let txHash: `0x${string}` | undefined
+
+      try {
+        await writeContractAsync({ address: USDC_ADDRESS as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [ROUTER_ADDRESS, amountWei] })
+        txHash = await writeContractAsync({ address: ROUTER_ADDRESS as `0x${string}`, abi: ROUTER_ABI, functionName: 'sendPayment', args: [submitterAddress as `0x${string}`, amountWei, `Bounty Winner: ${selected.title}`] })
+      } catch (routerErr) {
+        console.warn('[Bounty] Router payout failed, using direct transfer:', routerErr)
+      }
+
+      if (!txHash) {
+        try {
+          txHash = await writeContractAsync({
+            address: USDC_ADDRESS as `0x${string}`,
+            abi: USDC_ABI,
+            functionName: 'transfer',
+            args: [submitterAddress as `0x${string}`, amountWei],
+          })
+        } catch {
+          txHash = await sendTransactionAsync({
+            to: submitterAddress as `0x${string}`,
+            value: parseEther(selected.prizeAmount),
+          })
+        }
+      }
+
+      if (txHash) {
+        await fetch(`${BACKEND_URL}/api/bounties/${selected.id}/select-winner`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ submissionId, rewardAmount: selected.prizeAmount, rewardTxHash: txHash }) })
+        await fetchBounty(selected.id)
+        await fetchBounties()
+      }
+    } catch (e: any) { setError(e?.shortMessage || e?.message || 'Failed to select winner') }
     setSelectingWinner(null)
   }
 

@@ -8,7 +8,7 @@ import { NetworkGuard } from '@/components/NetworkGuard'
 import { ROUTER_ABI, USDC_ABI } from '@/lib/abi'
 import { ROUTER_ADDRESS, USDC_ADDRESS } from '@/lib/constants'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const EXPLORER_URL = 'https://testnet.arcscan.app'
 
 export default function BountiesPage() {
@@ -29,16 +29,43 @@ export default function BountiesPage() {
   const { writeContractAsync } = useWriteContract()
 
   const fetchBounties = useCallback(async () => {
+    let list: any[] = []
     try {
       const res = await fetch(`${BACKEND_URL}/api/bounties`)
-      if (res.ok) setBounties(await res.json())
+      if (res.ok) list = await res.json()
     } catch {}
+
+    // Load local offline bounties if any
+    try {
+      const local = localStorage.getItem('easyzpay_local_bounties')
+      if (local) {
+        const localList = JSON.parse(local)
+        for (const item of localList) {
+          if (!list.some(b => b.id === item.id)) {
+            list.unshift(item)
+          }
+        }
+      }
+    } catch {}
+
+    setBounties(list)
   }, [])
 
   const fetchBounty = useCallback(async (id: string) => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/bounties/${id}`)
-      if (res.ok) setSelected(await res.json())
+      if (res.ok) {
+        setSelected(await res.json())
+        return
+      }
+    } catch {}
+
+    try {
+      const local = localStorage.getItem('easyzpay_local_bounties')
+      if (local) {
+        const found = JSON.parse(local).find((b: any) => b.id === id)
+        if (found) setSelected(found)
+      }
     } catch {}
   }, [])
 
@@ -47,10 +74,53 @@ export default function BountiesPage() {
   const createBounty = async () => {
     if (!address || !title || !prizeAmount) return
     setLoading(true)
+    setError('')
     try {
-      const res = await fetch(`${BACKEND_URL}/api/bounties`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description, creatorAddress: address, prizeAmount }) })
-      if (res.ok) { const b = await res.json(); setSelected(b); setTab('detail'); setTitle(''); setDescription(''); setPrizeAmount(''); await fetchBounties() }
-    } catch { setError('Failed to create bounty') }
+      const res = await fetch(`${BACKEND_URL}/api/bounties`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, creatorAddress: address, prizeAmount }),
+      })
+      if (res.ok) {
+        const b = await res.json()
+        setSelected(b)
+        setTab('detail')
+        setTitle('')
+        setDescription('')
+        setPrizeAmount('')
+        await fetchBounties()
+        setLoading(false)
+        return
+      }
+    } catch {}
+
+    // Fallback: save to local bounties
+    try {
+      const newB = {
+        id: `bounty_local_${Date.now()}`,
+        title,
+        description: description || '',
+        creatorAddress: address.toLowerCase(),
+        prizeAmount,
+        token: 'USDC',
+        chainId: 5042002,
+        status: 'OPEN',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        submissions: [],
+      }
+      const existing = JSON.parse(localStorage.getItem('easyzpay_local_bounties') || '[]')
+      existing.unshift(newB)
+      localStorage.setItem('easyzpay_local_bounties', JSON.stringify(existing))
+      setSelected(newB)
+      setTab('detail')
+      setTitle('')
+      setDescription('')
+      setPrizeAmount('')
+      await fetchBounties()
+    } catch (e: any) {
+      setError('Could not save bounty. Please check inputs.')
+    }
     setLoading(false)
   }
 

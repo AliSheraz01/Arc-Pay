@@ -55,7 +55,7 @@ export const SCHEDULER_ADDRESS = (process.env.NEXT_PUBLIC_SCHEDULER_ADDRESS ?? '
 
 export const EXPLORER_URL = 'https://testnet.arcscan.app'
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
 export const FAUCET_URL = 'https://faucet.circle.com'
 

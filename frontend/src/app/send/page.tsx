@@ -49,22 +49,31 @@ function SendForm() {
   const amountNum = parseFloat(amount || '0')
   const isValidAmount = !isNaN(amountNum) && amountNum > 0 && amountNum <= parseFloat(balanceFormatted)
 
+  const [connectedWithoutWallet, setConnectedWithoutWallet] = useState(false)
+
   // Resolve recipient based on mode
   const resolveRecipient = useCallback(async (value: string, mode: 'easyzpay' | 'x' | 'address' = recipientMode) => {
     setResolveError('')
     setResolvedAddress(null)
     setXProfileData(null)
     setUnconnectedXUser(null)
+    setConnectedWithoutWallet(false)
 
     if (!value) return
     const clean = value.trim()
-    
+
+    // Fast check: direct address
+    if (isAddress(clean)) {
+      setResolvedAddress(clean as `0x${string}`)
+      return
+    }
+
     // Auto-detect mode if not explicitly set correctly or append prefix for backend
-    let identifier = clean;
+    let identifier = clean
     if (mode === 'x' && !identifier.startsWith('x:')) {
-      identifier = 'x:' + identifier.replace('@', '');
+      identifier = 'x:' + identifier.replace('@', '')
     } else if (mode === 'easyzpay' && !identifier.startsWith('@') && !identifier.startsWith('0x')) {
-      identifier = '@' + identifier;
+      identifier = '@' + identifier
     }
 
     setResolving(true)
@@ -82,19 +91,77 @@ function SendForm() {
                 avatar: data.avatar,
               })
             }
+            setResolving(false)
             return
           } else if (data.type === 'x' && !data.registered) {
-            setUnconnectedXUser(data.xUsername)
+            // X account found but no activated wallet
+            setConnectedWithoutWallet(true)
+            setUnconnectedXUser(data.xUsername || clean.replace('@', ''))
+            setResolving(false)
             return
+          }
+        } else if (data.type === 'x') {
+          // X identity genuinely does not exist
+          setUnconnectedXUser(data.xUsername || clean.replace('@', ''))
+          setResolving(false)
+          return
+        }
+      }
+    } catch {}
+
+    // Resilient on-chain direct fallback via Arc Testnet
+    try {
+      const uname = clean.replace('@', '').toLowerCase()
+      const client = createPublicClient({
+        chain: arcTestnet,
+        transport: http('https://rpc.testnet.arc.network'),
+      })
+      const onChainAddr = await client.readContract({
+        address: REGISTRY_ADDRESS,
+        abi: REGISTRY_ABI,
+        functionName: 'resolveUsername',
+        args: [uname],
+      }) as `0x${string}`
+
+      if (onChainAddr && onChainAddr !== '0x0000000000000000000000000000000000000000' && isAddress(onChainAddr)) {
+        setResolvedAddress(onChainAddr)
+        setResolving(false)
+        return
+      }
+    } catch {}
+
+    // Check localStorage cache for connected X accounts
+    try {
+      const handle = clean.replace('@', '').toLowerCase()
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('easyzpay_x_')) {
+          const raw = localStorage.getItem(key)
+          if (raw) {
+            const acc = JSON.parse(raw)
+            if (acc.username?.toLowerCase() === handle) {
+              const addr = key.replace('easyzpay_x_', '') as `0x${string}`
+              if (isAddress(addr)) {
+                setResolvedAddress(addr)
+                setXProfileData({
+                  username: acc.username,
+                  displayName: acc.displayName || `@${acc.username}`,
+                })
+                setResolving(false)
+                return
+              }
+            }
           }
         }
       }
-      setResolveError(`Could not resolve recipient: ${clean}`)
-    } catch (e) {
-      setResolveError('Network error while resolving recipient')
-    } finally {
-      setResolving(false)
+    } catch {}
+
+    if (mode === 'x' || clean.startsWith('x:')) {
+      setUnconnectedXUser(clean.replace('x:', '').replace('@', ''))
+    } else {
+      setResolveError(`Could not find user "${clean}"`)
     }
+    setResolving(false)
   }, [recipientMode])
 
   // Auto-resolve on mount if query param is set
@@ -261,29 +328,42 @@ function SendForm() {
                 )}
                 {unconnectedXUser && (
                   <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginTop: '10px' }}>
-                    <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, margin: '0 0 6px 0' }}>
-                      This X user (@{unconnectedXUser}) hasn't connected EasyZPay yet.
-                    </p>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: '0 0 10px 0' }}>
-                      Invite them so they can receive payments straight to their X handle:
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`https://easyzpay.xyz/invite?ref=${unconnectedXUser}`)
-                        setInviteCopied(true)
-                        setTimeout(() => setInviteCopied(false), 2000)
-                      }}
-                      style={{
-                        background: inviteCopied ? 'rgba(0, 212, 168, 0.15)' : 'var(--surface-raised)',
-                        border: '1px solid var(--border)',
-                        color: inviteCopied ? 'var(--green)' : 'var(--text-primary)',
-                        padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                        cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px'
-                      }}
-                    >
-                      {inviteCopied ? '✓ Invite Link Copied!' : 'Copy EasyZPay Invite Link'}
-                    </button>
+                    {connectedWithoutWallet ? (
+                      <div>
+                        <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, margin: '0 0 4px 0' }}>
+                          X account connected, but this user hasn't activated their EasyZPay wallet yet.
+                        </p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0 }}>
+                          They will be able to receive payments once they register their wallet address on EasyZPay.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700, margin: '0 0 6px 0' }}>
+                          This X user (@{unconnectedXUser}) hasn't connected EasyZPay yet.
+                        </p>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: '0 0 10px 0' }}>
+                          Invite them so they can receive payments straight to their X handle:
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`https://easyzpay.xyz/invite?ref=${unconnectedXUser}`)
+                            setInviteCopied(true)
+                            setTimeout(() => setInviteCopied(false), 2000)
+                          }}
+                          style={{
+                            background: inviteCopied ? 'rgba(0, 212, 168, 0.15)' : 'var(--surface-raised)',
+                            border: '1px solid var(--border)',
+                            color: inviteCopied ? 'var(--green)' : 'var(--text-primary)',
+                            padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                            cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px'
+                          }}
+                        >
+                          {inviteCopied ? '✓ Invite Link Copied!' : 'Copy EasyZPay Invite Link'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {resolveError && !unconnectedXUser && (

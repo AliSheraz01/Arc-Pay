@@ -1,15 +1,15 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits } from 'viem'
+import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import Link from 'next/link'
 import { MdGroup, MdAdd, MdCheckCircle, MdErrorOutline, MdAccessTime, MdSend } from 'react-icons/md'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { ROUTER_ABI, USDC_ABI } from '@/lib/abi'
-import { ROUTER_ADDRESS, USDC_ADDRESS } from '@/lib/constants'
+import { ROUTER_ABI, USDC_ABI, REGISTRY_ABI } from '@/lib/abi'
+import { ROUTER_ADDRESS, USDC_ADDRESS, REGISTRY_ADDRESS, arcTestnet } from '@/lib/constants'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const EXPLORER_URL = 'https://testnet.arcscan.app'
 
 type Participant = { identifier: string; resolvedAddress: string | null; amount: string; displayName: string | null }
@@ -32,11 +32,27 @@ export default function PartyPage() {
   const { writeContractAsync } = useWriteContract()
 
   const fetchParties = useCallback(async () => {
-    if (!address) return
+    let list: any[] = []
+    if (address) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/party/user/${address}`)
+        if (res.ok) list = await res.json()
+      } catch {}
+    }
+
     try {
-      const res = await fetch(`${BACKEND_URL}/api/party/user/${address}`)
-      if (res.ok) setParties(await res.json())
+      const local = localStorage.getItem('easyzpay_local_parties')
+      if (local) {
+        const localList = JSON.parse(local)
+        for (const lp of localList) {
+          if (!list.some(p => p.id === lp.id)) {
+            list.unshift(lp)
+          }
+        }
+      }
     } catch {}
+
+    setParties(list)
   }, [address])
 
   useEffect(() => { fetchParties() }, [fetchParties])
@@ -46,26 +62,95 @@ export default function PartyPage() {
     setResolving(true)
     setError('')
     const id = participantInput.trim()
+
+    // 1. Direct address check
+    if (isAddress(id)) {
+      const addr = id as string
+      if (participants.some(p => p.resolvedAddress?.toLowerCase() === addr.toLowerCase())) {
+        setError('Participant already added')
+        setResolving(false)
+        return
+      }
+      const amt = splitType === 'equal' && totalAmount ? (parseFloat(totalAmount) / (participants.length + 1)).toFixed(2) : ''
+      setParticipants(prev => [...prev, { identifier: id, resolvedAddress: addr, amount: amt, displayName: `${addr.slice(0, 6)}…${addr.slice(-4)}` }])
+      setParticipantInput('')
+      setResolving(false)
+      return
+    }
+
+    let resolvedAddr: string | null = null
+    let resolvedDisplay: string | null = null
+
+    // 2. Try API canonical resolver
     try {
       const prefix = id.startsWith('0x') ? '' : id.includes('@') ? '' : '@'
       const res = await fetch(`${BACKEND_URL}/api/resolve/${encodeURIComponent(prefix + id)}`)
-      const data = await res.json()
-      if (data.walletAddress) {
-        if (participants.some(p => p.resolvedAddress?.toLowerCase() === data.walletAddress.toLowerCase())) {
-          setError('Participant already added')
-        } else {
-          const amt = splitType === 'equal' && totalAmount ? (parseFloat(totalAmount) / (participants.length + 1)).toFixed(2) : ''
-          setParticipants(prev => [...prev, { identifier: id, resolvedAddress: data.walletAddress, amount: amt, displayName: data.displayName || data.username || id }])
-          setParticipantInput('')
-          if (splitType === 'equal' && totalAmount) {
-            const perPerson = (parseFloat(totalAmount) / (participants.length + 1)).toFixed(2)
-            setParticipants(prev => prev.map(p => ({ ...p, amount: perPerson })))
+      if (res.ok) {
+        const data = await res.json()
+        if (data.walletAddress && isAddress(data.walletAddress)) {
+          resolvedAddr = data.walletAddress
+          resolvedDisplay = data.displayName || data.username || id
+        }
+      }
+    } catch {}
+
+    // 3. Try direct on-chain resolution via Arc Testnet
+    if (!resolvedAddr) {
+      try {
+        const cleanName = id.replace('@', '').toLowerCase()
+        const client = createPublicClient({
+          chain: arcTestnet,
+          transport: http('https://rpc.testnet.arc.network'),
+        })
+        const onChain = await client.readContract({
+          address: REGISTRY_ADDRESS,
+          abi: REGISTRY_ABI,
+          functionName: 'resolveUsername',
+          args: [cleanName],
+        }) as string
+        if (onChain && onChain !== '0x0000000000000000000000000000000000000000' && isAddress(onChain)) {
+          resolvedAddr = onChain
+          resolvedDisplay = `@${cleanName}`
+        }
+      } catch {}
+    }
+
+    // 4. Try localStorage X accounts
+    if (!resolvedAddr) {
+      try {
+        const handle = id.replace('x:', '').replace('@', '').toLowerCase()
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && key.startsWith('easyzpay_x_')) {
+            const acc = JSON.parse(localStorage.getItem(key) || '{}')
+            if (acc.username?.toLowerCase() === handle) {
+              const cachedAddr = key.replace('easyzpay_x_', '')
+              if (isAddress(cachedAddr)) {
+                resolvedAddr = cachedAddr
+                resolvedDisplay = acc.displayName || `@${handle}`
+                break
+              }
+            }
           }
         }
+      } catch {}
+    }
+
+    if (resolvedAddr) {
+      if (participants.some(p => p.resolvedAddress?.toLowerCase() === resolvedAddr?.toLowerCase())) {
+        setError('Participant already added')
       } else {
-        setError(`Could not resolve "${id}"`)
+        const amt = splitType === 'equal' && totalAmount ? (parseFloat(totalAmount) / (participants.length + 1)).toFixed(2) : ''
+        setParticipants(prev => [...prev, { identifier: id, resolvedAddress: resolvedAddr, amount: amt, displayName: resolvedDisplay || id }])
+        setParticipantInput('')
+        if (splitType === 'equal' && totalAmount) {
+          const perPerson = (parseFloat(totalAmount) / (participants.length + 1)).toFixed(2)
+          setParticipants(prev => prev.map(p => ({ ...p, amount: perPerson })))
+        }
       }
-    } catch { setError('Network error resolving participant') }
+    } else {
+      setError(`Could not find wallet for "${id}"`)
+    }
     setResolving(false)
   }
 
@@ -79,13 +164,62 @@ export default function PartyPage() {
   const createParty = async () => {
     if (!address || !name || !totalAmount || participants.length === 0) return
     setCreating(true)
+    setError('')
     try {
       const res = await fetch(`${BACKEND_URL}/api/party`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, creatorAddress: address, splitType, totalAmount, participants: participants.map(p => ({ identifier: p.identifier, resolvedAddress: p.resolvedAddress, amount: p.amount })) })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          creatorAddress: address,
+          splitType,
+          totalAmount,
+          participants: participants.map(p => ({ identifier: p.identifier, resolvedAddress: p.resolvedAddress, amount: p.amount })),
+        }),
       })
-      if (res.ok) { await fetchParties(); setStep('list'); setName(''); setTotalAmount(''); setParticipants([]) }
-    } catch { setError('Failed to create party') }
+      if (res.ok) {
+        await fetchParties()
+        setStep('list')
+        setName('')
+        setTotalAmount('')
+        setParticipants([])
+        setCreating(false)
+        return
+      }
+    } catch {}
+
+    // Fallback: save to localStorage
+    try {
+      const newParty = {
+        id: `party_local_${Date.now()}`,
+        name,
+        creatorAddress: address.toLowerCase(),
+        splitType,
+        totalAmount,
+        token: 'USDC',
+        chainId: 5042002,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        participants: participants.map((p, idx) => ({
+          id: `pp_loc_${idx}_${Date.now()}`,
+          identifier: p.identifier,
+          resolvedAddress: p.resolvedAddress,
+          amount: p.amount,
+          status: 'PENDING',
+        })),
+      }
+      const existing = JSON.parse(localStorage.getItem('easyzpay_local_parties') || '[]')
+      existing.unshift(newParty)
+      localStorage.setItem('easyzpay_local_parties', JSON.stringify(existing))
+      await fetchParties()
+      setStep('list')
+      setName('')
+      setTotalAmount('')
+      setParticipants([])
+    } catch {
+      setError('Could not create party. Please check inputs.')
+    }
     setCreating(false)
   }
 

@@ -150,7 +150,35 @@ export default function ProfilePage() {
     if (!address) return
     setXConnecting(true)
     setXError('')
+    const handle = xHandleInput.trim().replace('@', '')
+    const displayName = xDisplayNameInput.trim() || `@${handle}`
+
     try {
+      if (handle) {
+        const res = await fetch(`${BACKEND_URL}/api/social/x/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            username: handle,
+            displayName,
+          }),
+        })
+        if (res.ok) {
+          const acc = {
+            connected: true,
+            username: handle,
+            displayName,
+            avatar: `https://unavatar.io/twitter/${handle}`,
+          }
+          localStorage.setItem(`easyzpay_x_${address.toLowerCase()}`, JSON.stringify(acc))
+          setXAccount(acc)
+          setShowConnectXModal(false)
+          setXConnecting(false)
+          return
+        }
+      }
+
       const res = await fetch(`${BACKEND_URL}/api/social/x/auth?address=${address}`)
       if (res.ok) {
         const data = await res.json()
@@ -159,9 +187,20 @@ export default function ProfilePage() {
           return
         }
       }
-      setXError('Failed to initialize official X OAuth.')
-    } catch (err: any) {
-      setXError('Network error starting X OAuth')
+    } catch {}
+
+    if (handle) {
+      const localAcc = {
+        connected: true,
+        username: handle,
+        displayName,
+        avatar: `https://unavatar.io/twitter/${handle}`,
+      }
+      localStorage.setItem(`easyzpay_x_${address.toLowerCase()}`, JSON.stringify(localAcc))
+      setXAccount(localAcc)
+      setShowConnectXModal(false)
+    } else {
+      setXError('Please enter your X username handle.')
     }
     setXConnecting(false)
   }

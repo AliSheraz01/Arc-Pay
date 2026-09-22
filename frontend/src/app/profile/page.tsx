@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
-import { parseUnits, formatUnits } from 'viem'
+import { formatUnits } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
+import { ACTIVE_CHAIN } from '@/config/network'
 import {
   USDC_ADDRESS,
   REGISTRY_ADDRESS,
@@ -22,19 +23,15 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import styles from './ProfileAnalyzer.module.css'
 
-const REGISTRATION_FEE = parseUnits('1', 6) // 1 USDC
-
 export default function ProfilePage() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const isCorrectNetwork = chainId === ARC_CHAIN_ID
 
   const [usernameInput, setUsernameInput] = useState('')
-  const [approvedInSession, setApprovedInSession] = useState(false)
   const [step, setStep] = useState<'idle' | 'approving' | 'registering' | 'done'>('idle')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
   const [regTxHash, setRegTxHash] = useState<`0x${string}` | undefined>()
 
   // X Social Connection State
@@ -64,21 +61,6 @@ export default function ProfilePage() {
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     query: { enabled: !!address && isCorrectNetwork, refetchInterval: 5000 },
-  })
-
-  // Read current allowance
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: USDC_ABI,
-    functionName: 'allowance',
-    args: address ? [address, REGISTRY_ADDRESS] : undefined,
-    query: { enabled: !!address && isCorrectNetwork },
-  })
-
-  // Wait for approve tx
-  const { isSuccess: approveSuccess } = useWaitForTransactionReceipt({
-    hash: approveTxHash,
-    query: { enabled: !!approveTxHash },
   })
 
   // Wait for register tx
@@ -218,17 +200,6 @@ export default function ProfilePage() {
     setXAccount({ connected: false })
   }
 
-  useEffect(() => {
-    setApprovedInSession(false)
-  }, [usernameInput])
-
-  useEffect(() => {
-    if (approveSuccess) {
-      refetchAllowance()
-      setApprovedInSession(true)
-      setStep('idle')
-    }
-  }, [approveSuccess, refetchAllowance])
 
   useEffect(() => {
     if (regReceipt && step === 'registering') {
@@ -438,7 +409,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className={styles.balanceSection}>
-                  <div className={styles.balanceLabel}>ARC TESTNET BALANCE</div>
+                  <div className={styles.balanceLabel}>{ACTIVE_CHAIN.name.toUpperCase()} BALANCE</div>
                   <div className={styles.balanceValue}>
                     •••• <div className={styles.usdcIcon}>$</div>
                   </div>
@@ -488,7 +459,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className={styles.scoreFooter}>
-                  Calculated from live Arc Testnet data · Diminishing returns prevent farming
+                  Calculated from live Arc Mainnet data · Diminishing returns prevent farming
                 </div>
               </div>
             </div>
@@ -756,7 +727,7 @@ export default function ProfilePage() {
           </div>
 
           <div className={styles.footer}>
-            Live · <span className={styles.highlight}>Arc Testnet Explorer API</span> · Profile globally visible
+            Live · <span className={styles.highlight}>Arc Explorer API</span> · Profile globally visible
           </div>
 
           {/* Registration Fallback (Hidden if already registered, kept for functionality) */}
@@ -764,7 +735,7 @@ export default function ProfilePage() {
             <div className={styles.regBanner}>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>Claim your Identity</h4>
-                <p style={{ fontSize: '12px', color: '#a1a1aa', margin: 0 }}>Required 1 USDC fee to register.</p>
+                <p style={{ fontSize: '12px', color: '#a1a1aa', margin: 0 }}>Free registration (gas only)</p>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input 

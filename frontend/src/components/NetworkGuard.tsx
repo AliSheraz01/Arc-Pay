@@ -1,13 +1,15 @@
 'use client'
 
 import { useChainId } from 'wagmi'
-import { ARC_CHAIN_ID } from '@/lib/constants'
+import { ARC_CHAIN_ID, ACTIVE_CHAIN, EXPLORER_URL, IS_PRODUCTION } from '@/lib/constants'
 
 export function NetworkGuard({ children }: { children: React.ReactNode }) {
   const chainId = useChainId()
   const isCorrectNetwork = chainId === ARC_CHAIN_ID
 
   if (!isCorrectNetwork && chainId) {
+    const targetNetworkName = IS_PRODUCTION ? 'Arc Mainnet' : 'Arc Testnet'
+
     return (
       <>
         <div
@@ -27,7 +29,7 @@ export function NetworkGuard({ children }: { children: React.ReactNode }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '18px' }}>⚠️</span>
             <span style={{ color: '#ff4466', fontWeight: 600, fontSize: '14px' }}>
-              Wrong network — please switch to Arc Network
+              Wrong network — please switch to {targetNetworkName}
             </span>
           </div>
           <SwitchNetworkButton />
@@ -43,6 +45,9 @@ export function NetworkGuard({ children }: { children: React.ReactNode }) {
 }
 
 function SwitchNetworkButton() {
+  const targetNetworkName = IS_PRODUCTION ? 'Arc Mainnet' : 'Arc Testnet'
+  const targetRpcUrl = IS_PRODUCTION ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network'
+
   async function handleSwitch() {
     const ethereum = typeof window !== 'undefined' ? ((window as any).okxwallet || (window as any).ethereum) : undefined
     if (!ethereum) return
@@ -52,16 +57,16 @@ function SwitchNetworkButton() {
         params: [{ chainId: '0x' + ARC_CHAIN_ID.toString(16) }],
       })
     } catch (err: any) {
-      // Fallback: If switch fails (e.g. unrecognized chain ID, or wallet-specific error code), attempt to add the chain
+      // Fallback: If switch fails, attempt to add the chain
       try {
         await ethereum.request({
           method: 'wallet_addEthereumChain',
           params: [{
             chainId: '0x' + ARC_CHAIN_ID.toString(16),
-            chainName: 'Arc Testnet',
+            chainName: targetNetworkName,
             nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
-            rpcUrls: ['https://rpc.testnet.arc.network'],
-            blockExplorerUrls: ['https://testnet.arcscan.app'],
+            rpcUrls: [targetRpcUrl],
+            blockExplorerUrls: [EXPLORER_URL],
           }],
         })
       } catch (addErr) {
@@ -74,7 +79,7 @@ function SwitchNetworkButton() {
     <button
       onClick={handleSwitch}
       style={{
-        background: '#ff4466',
+        background: '#1035f6',
         color: 'white',
         border: 'none',
         borderRadius: '8px',
@@ -88,7 +93,7 @@ function SwitchNetworkButton() {
       onMouseOver={e => (e.currentTarget.style.opacity = '0.8')}
       onMouseOut={e => (e.currentTarget.style.opacity = '1')}
     >
-      Switch Network
+      Switch to {targetNetworkName}
     </button>
   )
 }

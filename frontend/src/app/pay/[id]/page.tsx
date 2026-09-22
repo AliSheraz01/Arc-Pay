@@ -258,7 +258,7 @@ export default function PayRequestPage({ params }: { params: Promise<{ id: strin
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#55556a', fontSize: '13px' }}>Network</span>
-                    <span style={{ color: '#f0f0ff', fontSize: '13px', fontWeight: 600 }}>Arc Testnet</span>
+                    <span style={{ color: '#f0f0ff', fontSize: '13px', fontWeight: 600 }}>Arc Mainnet</span>
                   </div>
                 </div>
               </div>

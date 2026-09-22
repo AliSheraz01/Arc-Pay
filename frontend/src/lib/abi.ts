@@ -63,11 +63,33 @@ export const REGISTRY_ABI = [
     outputs: [{ name: '', type: 'address' }],
   },
   {
+    name: 'usernameOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '_user', type: 'address' }],
+    outputs: [{ name: '', type: 'string' }],
+  },
+  {
     name: 'getMyUsername',
     type: 'function',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'string' }],
+  },
+  {
+    name: 'isRegistered',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '_username', type: 'string' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'UsernameRegistered',
+    type: 'event',
+    inputs: [
+      { name: 'owner', type: 'address', indexed: true },
+      { name: 'username', type: 'string', indexed: false },
+    ],
   },
 ] as const
 
@@ -96,7 +118,7 @@ export const ROUTER_ABI = [
   },
 ] as const
 
-// ABI for ArcPayBulkRouter
+// ABI for ArcPayBulkRouter (legacy isolated)
 export const BULK_ROUTER_ABI = [
   {
     name: 'sendBulkPayment',
@@ -172,7 +194,7 @@ export const MESSAGE_TRANSMITTER_ABI = [
   }
 ] as const
 
-// ABI for ArcPayScheduler
+// ABI for ArcPayScheduler (legacy isolated)
 export const SCHEDULER_ABI = [
   {
     name: 'createSchedule',
@@ -204,7 +226,7 @@ export const SCHEDULER_ABI = [
   }
 ] as const
 
-// ABI for BountyEscrow — holds bounty prize USDC in escrow, releases to winner
+// ABI for BountyEscrow — holds bounty prize USDC in escrow, releases to winner, manages cancellation
 export const BOUNTY_ESCROW_ABI = [
   {
     name: 'depositBounty',
@@ -213,6 +235,7 @@ export const BOUNTY_ESCROW_ABI = [
     inputs: [
       { name: 'bountyId', type: 'bytes32' },
       { name: 'amount', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
     ],
     outputs: [],
   },
@@ -227,6 +250,20 @@ export const BOUNTY_ESCROW_ABI = [
     outputs: [],
   },
   {
+    name: 'cancelBounty',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'bountyId', type: 'bytes32' }],
+    outputs: [],
+  },
+  {
+    name: 'refundExpiredBounty',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'bountyId', type: 'bytes32' }],
+    outputs: [],
+  },
+  {
     name: 'getBounty',
     type: 'function',
     stateMutability: 'view',
@@ -234,8 +271,19 @@ export const BOUNTY_ESCROW_ABI = [
     outputs: [
       { name: 'creator', type: 'address' },
       { name: 'amount', type: 'uint256' },
-      { name: 'funded', type: 'bool' },
-      { name: 'paid', type: 'bool' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'status', type: 'uint8' },
+      { name: 'winner', type: 'address' },
+    ],
+  },
+  {
+    name: 'BountyCreated',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'deadline', type: 'uint256', indexed: false },
     ],
   },
   {
@@ -245,14 +293,42 @@ export const BOUNTY_ESCROW_ABI = [
       { name: 'bountyId', type: 'bytes32', indexed: true },
       { name: 'creator', type: 'address', indexed: true },
       { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'deadline', type: 'uint256', indexed: false },
     ],
   },
   {
-    name: 'PrizeReleased',
+    name: 'WinnerSelected',
     type: 'event',
     inputs: [
       { name: 'bountyId', type: 'bytes32', indexed: true },
       { name: 'winner', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'RewardReleased',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'winner', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BountyCancelled',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+      { name: 'refundAmount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BountyRefunded',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'bytes32', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
       { name: 'amount', type: 'uint256', indexed: false },
     ],
   },

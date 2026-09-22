@@ -12,9 +12,10 @@ import {
   ARC_CHAIN_ID, 
   BACKEND_URL 
 } from '@/lib/constants'
+import { ACTIVE_CHAIN } from '@/config/network'
 import { USDC_ABI, REGISTRY_ABI } from '@/lib/abi'
 import Link from 'next/link'
-import { formatUnits, parseUnits } from 'viem'
+import { formatUnits } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { 
   MdSend, 
@@ -31,7 +32,9 @@ import {
   MdChevronRight,
   MdCheckCircle,
   MdAccessTime,
-  MdCallMade
+  MdCallMade,
+  MdSwapHoriz,
+  MdEmojiEvents
 } from 'react-icons/md'
 
 interface Transaction {
@@ -55,7 +58,6 @@ export default function DashboardPage() {
   const [registering, setRegistering] = useState(false)
   const [regError, setRegError] = useState('')
   const [regTxHash, setRegTxHash] = useState<`0x${string}` | undefined>()
-  const [approveTxHash, setApproveTxHash] = useState<`0x${string}` | undefined>()
 
   const { writeContractAsync } = useWriteContract()
 
@@ -77,16 +79,7 @@ export default function DashboardPage() {
     query: { enabled: !!address && isCorrectNetwork },
   })
 
-  // 3. Read USDC Allowance for Registry
-  const { data: registryAllowance, refetch: refetchAllowance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: USDC_ABI,
-    functionName: 'allowance',
-    args: address ? [address, REGISTRY_ADDRESS] : undefined,
-    query: { enabled: !!address && isCorrectNetwork, refetchInterval: 5000 },
-  })
-
-  // 4. Fetch transactions
+  // 3. Fetch transactions
   const { data: transactions, isLoading: txsLoading, refetch: refetchTxs } = useQuery({
     queryKey: ['transactions', address],
     queryFn: async () => {
@@ -99,23 +92,7 @@ export default function DashboardPage() {
     refetchInterval: 8000,
   })
 
-  const [approvedInSession, setApprovedInSession] = useState(false)
-
-  const { isLoading: waitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash })
   const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
-
-  // Reset session approval if username input changes
-  useEffect(() => {
-    setApprovedInSession(false)
-  }, [usernameInput])
-
-  // Trigger refetches after tx completion
-  useEffect(() => {
-    if (approveSuccess) {
-      refetchAllowance()
-      setApprovedInSession(true)
-    }
-  }, [approveSuccess, refetchAllowance])
 
   useEffect(() => {
     if (regSuccess) {
@@ -128,32 +105,21 @@ export default function DashboardPage() {
   }, [regSuccess, refetchUsername, refetchBalance, refetchTxs])
 
   const formattedBalance = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)).toFixed(2) : '0.00'
-  const REGISTRATION_FEE = BigInt(1000000) // 1 USDC (6 decimals)
-  const hasAllowance = (registryAllowance !== undefined ? registryAllowance >= REGISTRATION_FEE : false) || approvedInSession
-  const hasEnoughBalance = usdcBalance !== undefined ? (usdcBalance as bigint) >= REGISTRATION_FEE : false
-
-  async function handleApproveUSDC() {
-    setRegError('')
-    try {
-      const tx = await writeContractAsync({
-        address: USDC_ADDRESS,
-        abi: USDC_ABI,
-        functionName: 'approve',
-        args: [REGISTRY_ADDRESS, REGISTRATION_FEE],
-      })
-      setApproveTxHash(tx)
-    } catch (err: unknown) {
-      console.error('USDC approval failed:', err)
-      setRegError(err instanceof Error ? err.message : 'USDC approval failed')
-    }
-  }
 
   async function handleRegisterUsername() {
     if (!usernameInput) return
+    const username = usernameInput.toLowerCase().trim().replace('@', '')
+    if (username.length < 3 || username.length > 30) {
+      setRegError('Username must be 3-30 characters')
+      return
+    }
+    if (!/^[a-z0-9_]+$/.test(username)) {
+      setRegError('Only lowercase letters, numbers, and underscores are allowed')
+      return
+    }
     setRegistering(true)
     setRegError('')
     try {
-      const username = usernameInput.toLowerCase().trim().replace('@', '')
       const tx = await writeContractAsync({
         address: REGISTRY_ADDRESS,
         abi: REGISTRY_ABI,
@@ -169,7 +135,7 @@ export default function DashboardPage() {
           ? 'Username is already taken' 
           : msg.includes('has a username') 
           ? 'This wallet already has a username' 
-          : 'Registration failed. Check gas and USDC balance.'
+          : 'Registration failed. Check your wallet balance for gas.'
       )
       setRegistering(false)
     }
@@ -395,8 +361,7 @@ export default function DashboardPage() {
                       borderRadius: '12px', padding: '12px 16px', marginBottom: '16px',
                     }}>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
-                        Your current balance: <strong style={{ color: hasEnoughBalance ? 'var(--green)' : 'var(--red)' }}>{formattedBalance} USDC</strong>
-                        {!hasEnoughBalance && <><br /><span style={{ color: 'var(--red)', fontWeight: 'bold' }}>⚠️ Insufficient USDC balance. You need at least 1 USDC to register.</span></>}
+                        Claim your unique username on <strong>{ACTIVE_CHAIN.name}</strong>. Free on-chain registration (gas only).
                       </p>
                     </div>
 
@@ -411,8 +376,8 @@ export default function DashboardPage() {
                           placeholder="choose_username" 
                           value={usernameInput}
                           onChange={e => setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                          maxLength={24}
-                          disabled={registering || waitingReg || waitingApprove}
+                          maxLength={30}
+                          disabled={registering || waitingReg}
                           style={{
                             width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
                             borderRadius: '12px', padding: '14px 16px 14px 34px', color: 'var(--text-primary)',
@@ -429,7 +394,7 @@ export default function DashboardPage() {
                         </div>
                       )}
 
-                      {(waitingApprove || waitingReg || regSuccess) && (
+                      {(waitingReg || regSuccess) && (
                         <div style={{
                           background: 'var(--surface-raised)', border: '1px solid var(--border)',
                           borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px'
@@ -437,12 +402,12 @@ export default function DashboardPage() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: 700 }}>
                             <MdAccessTime size={18} className="shimmer-rotate" />
                             <span>
-                              {waitingApprove ? 'Waiting for USDC Approval...' : waitingReg ? 'Registering username on Arc...' : 'Successfully Registered!'}
+                              {waitingReg ? 'Registering username on Arc...' : 'Successfully Registered!'}
                             </span>
                           </div>
-                          {(approveTxHash || regTxHash) && (
+                          {regTxHash && (
                             <a 
-                              href={`${EXPLORER_URL}/tx/${approveTxHash || regTxHash}`} 
+                              href={`${EXPLORER_URL}/tx/${regTxHash}`} 
                               target="_blank" 
                               rel="noreferrer"
                               style={{ color: 'var(--accent)', fontSize: '11px', textDecoration: 'none' }}
@@ -453,37 +418,20 @@ export default function DashboardPage() {
                         </div>
                       )}
 
-                      {!hasAllowance ? (
-                        <button
-                          disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
-                          onClick={handleApproveUSDC}
-                          style={{
-                            width: '100%',
-                            background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
-                            border: 'none', borderRadius: '12px', padding: '14px 16px',
-                            color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
-                            fontSize: '15px', fontWeight: 800, cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
-                            boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(16, 53, 246, 0.2)' : 'none',
-                          }}
-                        >
-                          Step 1: Approve 1 USDC Fee
-                        </button>
-                      ) : (
-                        <button
-                          disabled={!usernameInput || registering || waitingApprove || waitingReg || !hasEnoughBalance}
-                          onClick={handleRegisterUsername}
-                          style={{
-                            width: '100%',
-                            background: (usernameInput && hasEnoughBalance) ? 'linear-gradient(135deg, #00d4a8, #00b896)' : 'var(--border)',
-                            border: 'none', borderRadius: '12px', padding: '14px 16px',
-                            color: (usernameInput && hasEnoughBalance) ? 'white' : 'var(--text-secondary)',
-                            fontSize: '15px', fontWeight: 800, cursor: (usernameInput && hasEnoughBalance) ? 'pointer' : 'not-allowed',
-                            boxShadow: (usernameInput && hasEnoughBalance) ? '0 4px 12px rgba(0, 212, 168, 0.25)' : 'none',
-                          }}
-                        >
-                          Step 2: Register Username (1 USDC)
-                        </button>
-                      )}
+                      <button
+                        disabled={!usernameInput || registering || waitingReg}
+                        onClick={handleRegisterUsername}
+                        style={{
+                          width: '100%',
+                          background: usernameInput ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
+                          border: 'none', borderRadius: '12px', padding: '14px 16px',
+                          color: usernameInput ? 'white' : 'var(--text-secondary)',
+                          fontSize: '15px', fontWeight: 800, cursor: usernameInput ? 'pointer' : 'not-allowed',
+                          boxShadow: usernameInput ? '0 4px 12px rgba(16, 53, 246, 0.2)' : 'none',
+                        }}
+                      >
+                        {waitingReg ? 'Confirming on Arc...' : registering ? 'Claiming...' : 'Claim @username (Free)'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -499,7 +447,7 @@ export default function DashboardPage() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>Recent Transactions</h3>
-                  <Link href="/history" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 700 }}>
+                  <Link href="/activity" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 700 }}>
                     View all
                   </Link>
                 </div>
@@ -605,10 +553,10 @@ export default function DashboardPage() {
               }}>
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <QuickActionRow href="/send" icon={MdSend} label="Send to @username" />
-                  <QuickActionRow href="/receive?tab=qr" icon={MdQrCode} label="Scan QR Code" />
-                  <QuickActionRow href="/receive?tab=request" icon={MdLink} label="Create Payment Link" />
-                  <QuickActionRow href="/receive?tab=request" icon={MdMonetizationOn} label="Request Payment" />
+                  <QuickActionRow href="/send" icon={MdSend} label="Send Money" />
+                  <QuickActionRow href="/receive" icon={MdQrCode} label="Receive / QR Code" />
+                  <QuickActionRow href="/cross-pay" icon={MdSwapHoriz} label="Cross Pay (Bridge & Pay)" />
+                  <QuickActionRow href="/bounties" icon={MdEmojiEvents} label="Explore Bounties" />
                 </div>
               </div>
 
@@ -620,11 +568,12 @@ export default function DashboardPage() {
                 padding: '24px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
               }}>
-                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Arc Network</h3>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>{ACTIVE_CHAIN.name}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <NetworkRow label="Network Status" value={<><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)', display: 'inline-block', marginRight: '6px' }} />Connected</>} />
-                  <NetworkRow label="Chain ID" value={chainId ? chainId.toString() : "5042002"} />
-                  <NetworkRow label="RPC" value="arc-testnet.rpc.com" />
+                  <NetworkRow label="Chain ID" value={ACTIVE_CHAIN.id.toString()} />
+                  <NetworkRow label="Native Gas" value="USDC (Precompile)" />
+                  <NetworkRow label="RPC" value={ACTIVE_CHAIN.rpcUrls.default.http[0].replace('https://', '')} />
                 </div>
               </div>
 

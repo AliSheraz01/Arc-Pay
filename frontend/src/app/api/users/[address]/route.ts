@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http, isAddress } from 'viem'
-import { arcTestnet, REGISTRY_ADDRESS } from '@/lib/constants'
+import { ACTIVE_CHAIN } from '@/config/network'
+import { REGISTRY_ADDRESS } from '@/lib/constants'
 import { REGISTRY_ABI } from '@/lib/abi'
 import { socialAccountsStore } from '@/app/api/resolve/[identifier]/route'
 
@@ -20,8 +21,8 @@ export async function GET(
   if (isAddress(address)) {
     try {
       const client = createPublicClient({
-        chain: arcTestnet,
-        transport: http('https://rpc.testnet.arc.network'),
+        chain: ACTIVE_CHAIN,
+        transport: http(ACTIVE_CHAIN.rpcUrls.default.http[0]),
       })
       const onChain = await client.readContract({
         address: REGISTRY_ADDRESS,

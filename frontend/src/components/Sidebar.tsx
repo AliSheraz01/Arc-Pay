@@ -66,12 +66,11 @@ export function Sidebar() {
   const navItems = [
     { href: '/', label: 'Home', icon: MdHome },
     { href: '/send', label: 'Send', icon: MdSend },
-    { href: '/party', label: 'Party', icon: MdPerson },
-    { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
-    { href: '/activity', label: 'Activity', icon: MdHistory },
+    { href: '/cross-pay', label: 'Cross Pay', icon: MdLink },
+    { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
+    { href: '/activity', label: 'History', icon: MdHistory },
     { href: '/profile', label: 'Profile', icon: MdPerson },
-    { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
 
   return (
@@ -298,8 +297,8 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile Tab Bottom Navigation */}
-      <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
-        {navItems.filter(item => ['Home', 'Send', 'Receive', 'Activity', 'Settings'].includes(item.label)).map(item => {
+      <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '64px', position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100 }}>
+        {navItems.map(item => {
           const isActive = pathname === item.href
           const Icon = item.icon
           return (
@@ -311,18 +310,18 @@ export function Sidebar() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '4px',
+                gap: '2px',
                 color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
                 textDecoration: 'none',
                 fontSize: '10px',
                 fontWeight: 700,
-                width: '50px',
+                flex: 1,
                 height: '100%',
                 transition: 'all 0.2s',
               }}
             >
-              <Icon size={20} />
-              <span>{item.label}</span>
+              <Icon size={19} />
+              <span style={{ fontSize: '9px', whiteSpace: 'nowrap' }}>{item.label}</span>
             </Link>
           )
         })}

@@ -5,7 +5,7 @@ import { useAccount, useWriteContract, useReadContract, useWaitForTransactionRec
 import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL, arcTestnet } from '@/lib/constants'
+import { USDC_ADDRESS, ROUTER_ADDRESS, REGISTRY_ADDRESS, EXPLORER_URL, BACKEND_URL, ACTIVE_CHAIN, IS_PRODUCTION } from '@/lib/constants'
 import { USDC_ABI, ROUTER_ABI, REGISTRY_ABI } from '@/lib/abi'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -70,38 +70,63 @@ function SendForm() {
 
     // Auto-detect mode if not explicitly set correctly or append prefix for backend
     let identifier = clean
-    if (mode === 'x' && !identifier.startsWith('x:')) {
-      identifier = 'x:' + identifier.replace('@', '')
+    const isXMode = mode === 'x' || identifier.startsWith('x:') || identifier.startsWith('X:')
+    const xHandle = identifier.replace(/^(x:|X:|@)/, '').trim().toLowerCase()
+
+    if (isXMode) {
+      identifier = 'x:' + xHandle
     } else if (mode === 'easyzpay' && !identifier.startsWith('@') && !identifier.startsWith('0x')) {
       identifier = '@' + identifier
     }
 
     setResolving(true)
+
+    // If searching for an X user, check dedicated X endpoint first
+    if (isXMode && xHandle) {
+      try {
+        const xRes = await fetch(`${BACKEND_URL}/api/resolve/x/${encodeURIComponent(xHandle)}`)
+        if (xRes.ok) {
+          const xData = await xRes.json()
+          if (xData.connected && xData.address && isAddress(xData.address)) {
+            setResolvedAddress(xData.address as `0x${string}`)
+            setXProfileData({
+              username: xData.username || xHandle,
+              displayName: xData.displayName || `@${xHandle}`,
+              avatar: xData.avatar,
+            })
+            setResolving(false)
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('X resolution check failed, attempting generic resolve:', err)
+      }
+    }
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/resolve/${encodeURIComponent(identifier)}`)
       if (res.ok) {
         const data = await res.json()
         if (data.found) {
-          if (data.registered && data.walletAddress) {
-            setResolvedAddress(data.walletAddress as `0x${string}`)
+          const targetAddr = data.walletAddress || data.address
+          if (targetAddr && isAddress(targetAddr)) {
+            setResolvedAddress(targetAddr as `0x${string}`)
             if (data.xUsername) {
               setXProfileData({
                 username: data.xUsername,
-                displayName: data.displayName,
+                displayName: data.displayName || `@${data.xUsername}`,
                 avatar: data.avatar,
               })
             }
             setResolving(false)
             return
           } else if (data.type === 'x' && !data.registered) {
-            // X account found but no activated wallet
             setConnectedWithoutWallet(true)
             setUnconnectedXUser(data.xUsername || clean.replace('@', ''))
             setResolving(false)
             return
           }
         } else if (data.type === 'x') {
-          // X identity genuinely does not exist
           setUnconnectedXUser(data.xUsername || clean.replace('@', ''))
           setResolving(false)
           return
@@ -109,12 +134,12 @@ function SendForm() {
       }
     } catch {}
 
-    // Resilient on-chain direct fallback via Arc Testnet
+    // Resilient on-chain direct fallback via Active Chain
     try {
       const uname = clean.replace('@', '').toLowerCase()
       const client = createPublicClient({
-        chain: arcTestnet,
-        transport: http('https://rpc.testnet.arc.network'),
+        chain: ACTIVE_CHAIN as any,
+        transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_PRODUCTION ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network')),
       })
       const onChainAddr = await client.readContract({
         address: REGISTRY_ADDRESS,
@@ -470,9 +495,13 @@ function SendForm() {
                       <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic' }}>"{memo}"</span>
                     </div>
                   )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Estimated Fee</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>~0.001 USDC</span>
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Network</span>
-                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>Arc Testnet</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 700 }}>{ACTIVE_CHAIN.name}</span>
                   </div>
                 </div>
               </div>

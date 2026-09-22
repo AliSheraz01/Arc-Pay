@@ -15,9 +15,9 @@ import {
   addressToBytes32, 
   BACKEND_URL, 
   REGISTRY_ADDRESS, 
-  arcTestnet,
   EXPLORER_URL,
-  CctpChainConfig 
+  CctpChainConfig,
+  IS_PRODUCTION
 } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI, TOKEN_MESSENGER_ABI, MESSAGE_TRANSMITTER_ABI } from '@/lib/abi'
 
@@ -142,9 +142,13 @@ function CctpTransferEngine() {
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
 
-  // Source and Destination chains
-  const [fromChain, setFromChain] = useState<CctpChainConfig>(CCTP_V2_CONFIGS[84532])
-  const [toChain, setToChain] = useState<CctpChainConfig>(CCTP_V2_CONFIGS[5042002])
+  // Source and Destination chains dynamically defaulted based on environment
+  const chainList = Object.values(CCTP_V2_CONFIGS)
+  const defaultFrom = IS_PRODUCTION ? (CCTP_V2_CONFIGS[8453] || chainList[1] || chainList[0]) : (CCTP_V2_CONFIGS[84532] || chainList[0])
+  const defaultTo = IS_PRODUCTION ? (CCTP_V2_CONFIGS[5042] || chainList[0]) : (CCTP_V2_CONFIGS[5042002] || chainList[0])
+
+  const [fromChain, setFromChain] = useState<CctpChainConfig>(defaultFrom)
+  const [toChain, setToChain] = useState<CctpChainConfig>(defaultTo)
 
   const [amount, setAmount] = useState('')
   const [recipient, setRecipient] = useState('')

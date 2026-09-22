@@ -1,17 +1,28 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract, useChainId } from 'wagmi'
 import { QRCodeSVG } from 'qrcode.react'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
-import { BACKEND_URL } from '@/lib/constants'
+import { BACKEND_URL, REGISTRY_ADDRESS, ARC_CHAIN_ID } from '@/lib/constants'
+import { REGISTRY_ABI } from '@/lib/abi'
+import { ACTIVE_CHAIN } from '@/config/network'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { MdArrowBack, MdContentCopy, MdCheck, MdQrCode, MdMonetizationOn, MdLink } from 'react-icons/md'
+import { 
+  MdArrowBack, 
+  MdContentCopy, 
+  MdCheck, 
+  MdQrCode, 
+  MdMonetizationOn, 
+  MdLink, 
+  MdShare 
+} from 'react-icons/md'
 
 function ReceiveForm() {
   const { address, isConnected } = useAccount()
+  const chainId = useChainId()
   const searchParams = useSearchParams()
   
   const [requestAmount, setRequestAmount] = useState('')
@@ -20,12 +31,28 @@ function ReceiveForm() {
   const [requestId, setRequestId] = useState('')
   const [xUsername, setXUsername] = useState<string | null>(null)
   const [copiedXLink, setCopiedXLink] = useState(false)
+  const [copiedUserLink, setCopiedUserLink] = useState(false)
+  const [copiedAddress, setCopiedAddress] = useState(false)
+  const [copiedDirectLink, setCopiedDirectLink] = useState(false)
+  const [shared, setShared] = useState(false)
+
   const [tab, setTab] = useState<'qr' | 'request'>(() => {
     const t = searchParams.get('tab')
     return t === 'request' ? 'request' : 'qr'
   })
-  const [copied, setCopied] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
+
+  // Read on-chain registered username
+  const { data: onChainUsername } = useReadContract({
+    address: REGISTRY_ADDRESS,
+    abi: REGISTRY_ABI,
+    functionName: 'getMyUsername',
+    account: address,
+    query: { enabled: !!address && chainId === ARC_CHAIN_ID },
+  })
+
+  const username = onChainUsername && typeof onChainUsername === 'string' && onChainUsername.length > 0
+    ? onChainUsername
+    : null
 
   // Fetch connected X account on mount
   useEffect(() => {
@@ -41,11 +68,11 @@ function ReceiveForm() {
     }
   }, [address])
 
-  const paymentLink = address
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/send?to=${address}&amount=${requestAmount}&memo=${encodeURIComponent(requestMemo)}`
-    : ''
-
-  const qrData = address ? paymentLink : ''
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const usernameLink = username ? `${origin}/pay/@${username}` : ''
+  const directAddressLink = address ? `${origin}/send?to=${address}` : ''
+  const primaryPaymentLink = username ? usernameLink : directAddressLink
+  const qrData = primaryPaymentLink
 
   async function handleCreateRequest() {
     if (!address) return
@@ -70,15 +97,35 @@ function ReceiveForm() {
     }
   }
 
-  function handleCopy(text: string, isLink: boolean = false) {
+  function handleCopyText(text: string, type: 'user' | 'address' | 'direct' | 'x') {
     navigator.clipboard.writeText(text)
-    if (isLink) {
-      setCopiedLink(true)
-      setTimeout(() => setCopiedLink(false), 2000)
-    } else {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+    if (type === 'user') {
+      setCopiedUserLink(true)
+      setTimeout(() => setCopiedUserLink(false), 2000)
+    } else if (type === 'address') {
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
+    } else if (type === 'direct') {
+      setCopiedDirectLink(true)
+      setTimeout(() => setCopiedDirectLink(false), 2000)
+    } else if (type === 'x') {
+      setCopiedXLink(true)
+      setTimeout(() => setCopiedXLink(false), 2000)
     }
+  }
+
+  async function handleShare(url: string, title: string, text: string) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title, text, url })
+        setShared(true)
+        setTimeout(() => setShared(false), 2000)
+        return
+      } catch {}
+    }
+    navigator.clipboard.writeText(url)
+    setShared(true)
+    setTimeout(() => setShared(false), 2000)
   }
 
   if (!isConnected) {
@@ -92,9 +139,11 @@ function ReceiveForm() {
   }
 
   const shareableRequestLink = requestId === 'direct'
-    ? paymentLink
+    ? (username 
+      ? `${origin}/pay/@${username}?amount=${requestAmount}&memo=${encodeURIComponent(requestMemo)}`
+      : `${origin}/send?to=${address}&amount=${requestAmount}&memo=${encodeURIComponent(requestMemo)}`)
     : (requestId 
-      ? `${typeof window !== 'undefined' ? window.location.origin : ''}/pay/${requestId}` 
+      ? `${origin}/pay/${requestId}` 
       : '')
 
   return (
@@ -126,7 +175,7 @@ function ReceiveForm() {
                 }}
               >
                 {t === 'qr' ? <MdQrCode size={16} /> : <MdMonetizationOn size={16} />}
-                {t === 'qr' ? 'My QR Code' : 'Request Money'}
+                {t === 'qr' ? 'My QR & Links' : 'Request Money'}
               </button>
             ))}
           </div>
@@ -140,9 +189,42 @@ function ReceiveForm() {
               textAlign: 'center',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)'
             }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '6px' }}>Receive USDC</h1>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '28px' }}>
-                Scan QR code or share payment link to receive USDC
+              {/* Username badge */}
+              {username ? (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
+                  borderRadius: '100px', padding: '6px 16px', marginBottom: '16px'
+                }}>
+                  <span style={{ color: 'var(--accent)', fontSize: '15px', fontWeight: 900 }}>
+                    @{username}
+                  </span>
+                  <span style={{
+                    background: 'rgba(16, 185, 129, 0.15)', color: 'var(--green)',
+                    fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px'
+                  }}>
+                    VERIFIED ON ARC
+                  </span>
+                </div>
+              ) : (
+                <div style={{ marginBottom: '16px' }}>
+                  <Link href="/" style={{ textDecoration: 'none' }}>
+                    <span style={{
+                      color: 'var(--accent)', fontSize: '12px', fontWeight: 800,
+                      background: 'var(--surface-raised)', padding: '6px 14px', borderRadius: '20px',
+                      border: '1px dashed var(--accent)', display: 'inline-block'
+                    }}>
+                      ⚡ Claim your free @username on Dashboard
+                    </span>
+                  </Link>
+                </div>
+              )}
+
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                Receive USDC on {ACTIVE_CHAIN.name}
+              </h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px' }}>
+                Scan QR code or share your link to receive instant USDC transfers.
               </p>
 
               {/* QR Code Container */}
@@ -150,14 +232,14 @@ function ReceiveForm() {
                 display: 'inline-block',
                 background: 'white',
                 borderRadius: '20px',
-                padding: '24px',
-                marginBottom: '28px',
+                padding: '20px',
+                marginBottom: '24px',
                 boxShadow: '0 8px 30px rgba(16, 53, 246, 0.15)',
                 border: '1px solid var(--border)'
               }}>
                 <QRCodeSVG
                   value={qrData}
-                  size={200}
+                  size={190}
                   bgColor="white"
                   fgColor="#0a0a0f"
                   level="M"
@@ -165,12 +247,53 @@ function ReceiveForm() {
                 />
               </div>
 
+              {/* Primary Username Link Copy */}
+              {username && (
+                <div style={{ marginBottom: '12px' }}>
+                  <button
+                    onClick={() => handleCopyText(usernameLink, 'user')}
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #1035f6, #3b82f6)',
+                      border: 'none', borderRadius: '14px', padding: '14px',
+                      color: 'white', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
+                      transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      boxShadow: '0 4px 14px rgba(16, 53, 246, 0.25)'
+                    }}
+                  >
+                    {copiedUserLink ? <MdCheck size={18} /> : <MdLink size={18} />}
+                    {copiedUserLink ? 'Username Link Copied!' : `Copy @${username} Payment Link`}
+                  </button>
+                </div>
+              )}
+
+              {/* Share via Web Share API */}
+              <button
+                onClick={() => handleShare(
+                  primaryPaymentLink,
+                  `Pay ${username ? `@${username}` : 'me'} on EasyZPay`,
+                  `Pay ${username ? `@${username}` : 'me'} in USDC on ${ACTIVE_CHAIN.name}:`
+                )}
+                style={{
+                  width: '100%',
+                  background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                  borderRadius: '12px', padding: '12px',
+                  color: shared ? 'var(--green)' : 'var(--text-primary)',
+                  fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  marginBottom: '12px'
+                }}
+              >
+                {shared ? <MdCheck size={16} /> : <MdShare size={16} />}
+                {shared ? 'Link Shared / Copied!' : 'Share Payment Link via...'}
+              </button>
+
               {/* Copy Address Row */}
               <div
-                onClick={() => handleCopy(address ?? '')}
+                onClick={() => handleCopyText(address ?? '', 'address')}
                 style={{
                   background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                  borderRadius: '12px', padding: '14px 16px',
+                  borderRadius: '12px', padding: '12px 16px',
                   cursor: 'pointer', marginBottom: '12px',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   transition: 'border-color 0.2s',
@@ -178,51 +301,34 @@ function ReceiveForm() {
                 onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                 onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
-                <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'monospace' }}>
-                  {address?.slice(0, 12)}…{address?.slice(-10)}
-                </span>
-                <span style={{ color: copied ? 'var(--green)' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {copied ? <MdCheck size={14} /> : <MdContentCopy size={14} />}
-                  {copied ? 'Copied!' : 'Copy'}
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Wallet Address</div>
+                  <span style={{ color: 'var(--text-primary)', fontSize: '13px', fontFamily: 'monospace' }}>
+                    {address?.slice(0, 10)}…{address?.slice(-8)}
+                  </span>
+                </div>
+                <span style={{ color: copiedAddress ? 'var(--green)' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {copiedAddress ? <MdCheck size={14} /> : <MdContentCopy size={14} />}
+                  {copiedAddress ? 'Copied!' : 'Copy'}
                 </span>
               </div>
-
-              {/* Copy Direct Send Link */}
-              <button
-                onClick={() => handleCopy(paymentLink, true)}
-                style={{
-                  width: '100%',
-                  background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                  borderRadius: '12px', padding: '14px', color: copiedLink ? 'var(--green)' : 'var(--text-secondary)',
-                  fontSize: '13px', fontWeight: 700, cursor: 'pointer',
-                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  marginBottom: xUsername ? '10px' : '0'
-                }}
-                onMouseOver={e => { if(!copiedLink) {e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--text-primary)'} }}
-                onMouseOut={e => { if(!copiedLink) {e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'} }}
-              >
-                {copiedLink ? <MdCheck size={14} /> : <MdLink size={14} />}
-                {copiedLink ? 'Payment Link Copied!' : 'Copy Direct Payment Link'}
-              </button>
 
               {/* Copy X Handle Payment Link if X Connected */}
               {xUsername && (
                 <button
                   onClick={() => {
-                    const xLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/send?to=x/@${xUsername}`
-                    navigator.clipboard.writeText(xLink)
-                    setCopiedXLink(true)
-                    setTimeout(() => setCopiedXLink(false), 2000)
+                    const xLink = `${origin}/send?to=x/@${xUsername}`
+                    handleCopyText(xLink, 'x')
                   }}
                   style={{
                     width: '100%',
                     background: '#000', border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '12px', padding: '14px', color: copiedXLink ? 'var(--green)' : '#fff',
+                    borderRadius: '12px', padding: '12px', color: copiedXLink ? 'var(--green)' : '#fff',
                     fontSize: '13px', fontWeight: 800, cursor: 'pointer',
                     transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   }}
                 >
-                  <span>𝕏</span> {copiedXLink ? '✓ 𝕏 Payment Link Copied!' : `Copy 𝕏 Payment Link (@${xUsername})`}
+                  <span>𝕏</span> {copiedXLink ? '✓ 𝕏 Link Copied!' : `Copy 𝕏 Payment Link (@${xUsername})`}
                 </button>
               )}
             </div>
@@ -310,7 +416,7 @@ function ReceiveForm() {
                   <div style={{ fontSize: '48px', marginBottom: '16px' }}>✉️</div>
                   <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '18px', marginBottom: '8px' }}>Request Link Generated</h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px', lineHeight: 1.5 }}>
-                    Anyone with this link can pay you **{parseFloat(requestAmount).toFixed(2)} USDC** instantly on the Arc network.
+                    Anyone with this link can pay you <strong>{parseFloat(requestAmount).toFixed(2)} USDC</strong> on {ACTIVE_CHAIN.name}.
                   </p>
 
                   <div style={{
@@ -318,14 +424,14 @@ function ReceiveForm() {
                     background: 'var(--surface-raised)', border: '1px solid var(--border)',
                     borderRadius: '12px', padding: '12px 16px', cursor: 'pointer', marginBottom: '24px',
                   }}
-                    onClick={() => handleCopy(shareableRequestLink)}
+                    onClick={() => handleCopyText(shareableRequestLink, 'direct')}
                   >
                     <span style={{ color: 'var(--text-primary)', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textAlign: 'left', fontFamily: 'monospace' }}>
                       {shareableRequestLink}
                     </span>
-                    <span style={{ color: copied ? 'var(--green)' : 'var(--accent)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                      {copied ? <MdCheck size={16} /> : <MdContentCopy size={16} />}
-                      {copied ? 'Copied!' : 'Copy'}
+                    <span style={{ color: copiedDirectLink ? 'var(--green)' : 'var(--accent)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      {copiedDirectLink ? <MdCheck size={16} /> : <MdContentCopy size={16} />}
+                      {copiedDirectLink ? 'Copied!' : 'Copy'}
                     </span>
                   </div>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http, isAddress } from 'viem'
-import { arcTestnet, REGISTRY_ADDRESS } from '@/lib/constants'
+import { ACTIVE_CHAIN, REGISTRY_ADDRESS } from '@/lib/constants'
 import { REGISTRY_ABI } from '@/lib/abi'
 
 // In-memory store for connected social accounts in serverless runtime
@@ -66,8 +66,8 @@ export async function GET(
       // Try on-chain registry to get username
       try {
         const client = createPublicClient({
-          chain: arcTestnet,
-          transport: http('https://rpc.testnet.arc.network'),
+          chain: ACTIVE_CHAIN as any,
+          transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_PRODUCTION ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network')),
         })
         const onChainName = await client.readContract({
           address: REGISTRY_ADDRESS,
@@ -119,8 +119,8 @@ export async function GET(
 
     try {
       const client = createPublicClient({
-        chain: arcTestnet,
-        transport: http('https://rpc.testnet.arc.network'),
+        chain: ACTIVE_CHAIN as any,
+        transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_PRODUCTION ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network')),
       })
       const resolvedAddress = await client.readContract({
         address: REGISTRY_ADDRESS,

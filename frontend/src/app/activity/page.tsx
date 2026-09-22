@@ -39,7 +39,7 @@ interface Transaction {
 export default function ActivityPage() {
   const { address, isConnected } = useAccount()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'sent' | 'received'>('all')
+  const [filter, setFilter] = useState<'all' | 'sent' | 'received' | 'crosspay' | 'bounty'>('all')
   const [page, setPage] = useState(1)
   const itemsPerPage = 8
 
@@ -72,6 +72,8 @@ export default function ActivityPage() {
     // Filter Type
     if (filter === 'sent' && !isSent) return false
     if (filter === 'received' && isSent) return false
+    if (filter === 'crosspay' && tx.type !== 'CROSS_PAY') return false
+    if (filter === 'bounty' && !(tx.type === 'BOUNTY_FUNDED' || tx.type === 'BOUNTY_RELEASED' || tx.type === 'BOUNTY_CANCELLED')) return false
 
     // Search query match
     if (search.trim()) {
@@ -114,7 +116,7 @@ export default function ActivityPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '28px' }}>
               <div>
                 <h1 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: '4px' }}>Activity</h1>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Your unified USDC transaction timeline on Arc</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Your unified USDC transaction timeline on Arc Mainnet</p>
               </div>
             </div>
 
@@ -146,8 +148,8 @@ export default function ActivityPage() {
                 <MdSearch size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '4px', background: 'var(--surface-raised)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                {(['all', 'sent', 'received'] as const).map(tab => (
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--surface-raised)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                {(['all', 'sent', 'received', 'crosspay', 'bounty'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => {
@@ -167,7 +169,7 @@ export default function ActivityPage() {
                       textTransform: 'capitalize'
                     }}
                   >
-                    {tab}
+                    {tab === 'crosspay' ? 'Cross Pay' : tab}
                   </button>
                 ))}
               </div>

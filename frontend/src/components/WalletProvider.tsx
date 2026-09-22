@@ -5,34 +5,57 @@ import { PrivyProvider, useWallets } from '@privy-io/react-auth'
 import { WagmiProvider, createConfig, useSetActiveWallet } from '@privy-io/wagmi'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { http } from 'wagmi'
-import { arcTestnet, sonicTestnet, monadTestnet, unichainSepolia, inkTestnet } from '@/lib/constants'
-import { sepolia, arbitrumSepolia, baseSepolia, lineaSepolia, optimismSepolia } from 'wagmi/chains'
+import { arcMainnet, arcTestnet, ACTIVE_CHAIN, IS_PRODUCTION } from '@/lib/constants'
+import { 
+  base as baseMainnet, 
+  mainnet as ethereumMainnet, 
+  arbitrum as arbitrumMainnet, 
+  optimism as optimismMainnet, 
+  polygon as polygonMainnet, 
+  avalanche as avalancheMainnet,
+  baseSepolia,
+  sepolia,
+  arbitrumSepolia,
+  optimismSepolia
+} from 'viem/chains'
 
-// ── 1. Create Wagmi Configuration using Privy's wrapper
+// Chains array based on environment
+const supportedChains = IS_PRODUCTION
+  ? ([
+      arcMainnet,
+      baseMainnet,
+      ethereumMainnet,
+      arbitrumMainnet,
+      optimismMainnet,
+      polygonMainnet,
+      avalancheMainnet,
+      arcTestnet,
+    ] as const)
+  : ([
+      arcTestnet,
+      baseSepolia,
+      sepolia,
+      arbitrumSepolia,
+      optimismSepolia,
+      arcMainnet,
+    ] as const)
+
+// ── 1. Create Wagmi Configuration
 const config = createConfig({
-  chains: [
-    arcTestnet, 
-    sepolia, 
-    arbitrumSepolia, 
-    baseSepolia, 
-    lineaSepolia, 
-    optimismSepolia, 
-    sonicTestnet, 
-    monadTestnet, 
-    unichainSepolia, 
-    inkTestnet
-  ],
+  chains: supportedChains as any,
   transports: {
+    [arcMainnet.id]: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || 'https://rpc.mainnet.arc.io'),
     [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
-    [sepolia.id]: http(),
-    [arbitrumSepolia.id]: http(),
-    [baseSepolia.id]: http(),
-    [lineaSepolia.id]: http(),
-    [optimismSepolia.id]: http(),
-    [sonicTestnet.id]: http(),
-    [monadTestnet.id]: http(),
-    [unichainSepolia.id]: http(),
-    [inkTestnet.id]: http(),
+    [baseMainnet.id]: http('https://mainnet.base.org'),
+    [ethereumMainnet.id]: http('https://ethereum-rpc.publicnode.com'),
+    [arbitrumMainnet.id]: http('https://arb1.arbitrum.io/rpc'),
+    [optimismMainnet.id]: http('https://mainnet.optimism.io'),
+    [polygonMainnet.id]: http('https://polygon-rpc.com'),
+    [avalancheMainnet.id]: http('https://api.avax.network/ext/bc/C/rpc'),
+    [baseSepolia.id]: http('https://sepolia.base.org'),
+    [sepolia.id]: http('https://ethereum-sepolia-rpc.publicnode.com'),
+    [arbitrumSepolia.id]: http('https://sepolia-rollup.arbitrum.io/rpc'),
+    [optimismSepolia.id]: http('https://sepolia.optimism.io'),
   },
   ssr: false,
 })
@@ -121,23 +144,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       <PrivyProvider
         appId={appId}
         config={{
-          defaultChain: arcTestnet,
-          supportedChains: [
-            arcTestnet, 
-            sepolia, 
-            arbitrumSepolia, 
-            baseSepolia, 
-            lineaSepolia, 
-            optimismSepolia, 
-            sonicTestnet, 
-            monadTestnet, 
-            unichainSepolia, 
-            inkTestnet
-          ],
+          defaultChain: ACTIVE_CHAIN as any,
+          supportedChains: supportedChains as any,
           loginMethods: ['google', 'wallet', 'email'],
           appearance: {
             theme: activeTheme,
-            accentColor: '#1035f6', // Match our royal blue accent
+            accentColor: '#1035f6', // EasyZPay Royal Blue
             showWalletLoginFirst: false,
           },
           embeddedWallets: {

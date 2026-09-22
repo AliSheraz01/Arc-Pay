@@ -1,5 +1,5 @@
 // Centralized constants bridging to src/config/
-import { arcMainnet, arcTestnet, sonicTestnet, monadTestnet, unichainSepolia, inkTestnet } from '@/config/chains'
+import { arcMainnet, arcTestnet } from '@/config/chains'
 import { 
   NETWORK_MODE, 
   IS_PRODUCTION, 
@@ -16,10 +16,6 @@ import { ARC_USDC_ADDRESS, getUsdcConfig } from '@/config/tokens'
 export { 
   arcMainnet, 
   arcTestnet, 
-  sonicTestnet, 
-  monadTestnet, 
-  unichainSepolia, 
-  inkTestnet,
   NETWORK_MODE,
   IS_PRODUCTION,
   ACTIVE_CHAIN,

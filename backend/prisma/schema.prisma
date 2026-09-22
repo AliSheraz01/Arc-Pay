@@ -110,13 +110,15 @@ model Transaction {
   toAddress         String
   amount            String
   token             String   @default("USDC")
-  chainId           Int      @default(5042002)
+  chainId           Int      @default(5042)
   memo              String?
   status            String   @default("COMPLETED") // PENDING, SUBMITTED, CONFIRMED, FAILED
-  type              String   @default("SEND") // SEND, RECEIVE, PARTY, BOUNTY, REQUEST
-  blockNumber       Int
+  type              String   @default("SEND") // SEND, RECEIVE, CROSS_PAY, BOUNTY, REQUEST
+  blockNumber       Int?
   sourceChain       Int?
   destinationChain  Int?
+  destinationTxHash String?
+  route             String?
   senderUserId      String?
   recipientUserId   String?
   recipientUsername  String?
@@ -126,6 +128,7 @@ model Transaction {
   timestamp         DateTime @default(now())
   confirmedAt       DateTime?
 
+  @@unique([txHash, toAddress, amount])
   @@index([txHash])
   @@index([fromAddress])
   @@index([toAddress])
@@ -140,7 +143,7 @@ model Party {
   splitType      String   @default("equal") // equal, custom, percentage
   totalAmount    String
   token          String   @default("USDC")
-  chainId        Int      @default(5042002)
+  chainId        Int      @default(5042)
   status         String   @default("DRAFT") // DRAFT, ACTIVE, COMPLETED, CANCELLED
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -162,17 +165,30 @@ model PartyParticipant {
 
 model Bounty {
   id             String   @id @default(uuid())
+  bountyHash     String?  @unique // bytes32 hex hash used in on-chain escrow
   title          String
   description    String?
   creatorAddress String
   prizeAmount    String
   token          String   @default("USDC")
-  chainId        Int      @default(5042002)
-  status         String   @default("OPEN") // OPEN, REVIEWING, COMPLETED, CANCELLED
+  chainId        Int      @default(5042)
+  status         String   @default("OPEN") // DRAFT, OPEN, UNDER_REVIEW, COMPLETED, CANCELLED
+  escrowStatus   String   @default("UNFUNDED") // UNFUNDED, FUNDED, PAID, REFUNDED
+  category       String?  @default("Development")
+  difficulty     String?  @default("Medium")
+  tasks          String?  // JSON serialized task checklist
+  requirements   String?  // Submission requirements
+  deadline       DateTime?
   fundTxHash     String?
+  winnerAddress  String?
+  rewardTxHash   String?
+  refundTxHash   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   submissions    BountySubmission[]
+
+  @@index([creatorAddress])
+  @@index([status])
 }
 
 model BountySubmission {
@@ -180,12 +196,16 @@ model BountySubmission {
   bountyId         String
   submitterAddress String
   content          String
-  status           String   @default("PENDING") // PENDING, WINNER, REJECTED
+  links            String?  // JSON string or URL proofs
+  status           String   @default("PENDING") // DRAFT, PENDING, UNDER_REVIEW, WINNER, REJECTED
   rewardAmount     String?
   rewardTxHash     String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   bounty           Bounty   @relation(fields: [bountyId], references: [id], onDelete: Cascade)
+
+  @@index([bountyId])
+  @@index([submitterAddress])
 }
 
 model PaymentRequest {

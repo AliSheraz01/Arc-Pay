@@ -27,23 +27,39 @@ export interface BountyEscrowInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "bounties"
+      | "cancelBounty"
       | "depositBounty"
       | "getBounty"
+      | "refundExpiredBounty"
       | "releasePrize"
       | "usdcToken"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "BountyFunded" | "PrizeReleased"
+    nameOrSignatureOrTopic:
+      | "BountyCancelled"
+      | "BountyCreated"
+      | "BountyFunded"
+      | "BountyRefunded"
+      | "RewardReleased"
+      | "WinnerSelected"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "bounties", values: [BytesLike]): string;
   encodeFunctionData(
+    functionFragment: "cancelBounty",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "depositBounty",
-    values: [BytesLike, BigNumberish]
+    values: [BytesLike, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "getBounty",
+    values: [BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "refundExpiredBounty",
     values: [BytesLike]
   ): string;
   encodeFunctionData(
@@ -54,10 +70,18 @@ export interface BountyEscrowInterface extends Interface {
 
   decodeFunctionResult(functionFragment: "bounties", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "cancelBounty",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "depositBounty",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getBounty", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "refundExpiredBounty",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "releasePrize",
     data: BytesLike
@@ -65,7 +89,79 @@ export interface BountyEscrowInterface extends Interface {
   decodeFunctionResult(functionFragment: "usdcToken", data: BytesLike): Result;
 }
 
+export namespace BountyCancelledEvent {
+  export type InputTuple = [
+    bountyId: BytesLike,
+    creator: AddressLike,
+    refundAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    bountyId: string,
+    creator: string,
+    refundAmount: bigint
+  ];
+  export interface OutputObject {
+    bountyId: string;
+    creator: string;
+    refundAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace BountyCreatedEvent {
+  export type InputTuple = [
+    bountyId: BytesLike,
+    creator: AddressLike,
+    amount: BigNumberish,
+    deadline: BigNumberish
+  ];
+  export type OutputTuple = [
+    bountyId: string,
+    creator: string,
+    amount: bigint,
+    deadline: bigint
+  ];
+  export interface OutputObject {
+    bountyId: string;
+    creator: string;
+    amount: bigint;
+    deadline: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace BountyFundedEvent {
+  export type InputTuple = [
+    bountyId: BytesLike,
+    creator: AddressLike,
+    amount: BigNumberish,
+    deadline: BigNumberish
+  ];
+  export type OutputTuple = [
+    bountyId: string,
+    creator: string,
+    amount: bigint,
+    deadline: bigint
+  ];
+  export interface OutputObject {
+    bountyId: string;
+    creator: string;
+    amount: bigint;
+    deadline: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace BountyRefundedEvent {
   export type InputTuple = [
     bountyId: BytesLike,
     creator: AddressLike,
@@ -83,7 +179,25 @@ export namespace BountyFundedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace PrizeReleasedEvent {
+export namespace RewardReleasedEvent {
+  export type InputTuple = [
+    bountyId: BytesLike,
+    winner: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [bountyId: string, winner: string, amount: bigint];
+  export interface OutputObject {
+    bountyId: string;
+    winner: string;
+    amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace WinnerSelectedEvent {
   export type InputTuple = [
     bountyId: BytesLike,
     winner: AddressLike,
@@ -147,18 +261,25 @@ export interface BountyEscrow extends BaseContract {
   bounties: TypedContractMethod<
     [arg0: BytesLike],
     [
-      [string, bigint, boolean, boolean] & {
+      [string, bigint, bigint, bigint, string] & {
         creator: string;
         amount: bigint;
-        funded: boolean;
-        paid: boolean;
+        deadline: bigint;
+        status: bigint;
+        winner: string;
       }
     ],
     "view"
   >;
 
+  cancelBounty: TypedContractMethod<
+    [bountyId: BytesLike],
+    [void],
+    "nonpayable"
+  >;
+
   depositBounty: TypedContractMethod<
-    [bountyId: BytesLike, amount: BigNumberish],
+    [bountyId: BytesLike, amount: BigNumberish, deadline: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -166,14 +287,21 @@ export interface BountyEscrow extends BaseContract {
   getBounty: TypedContractMethod<
     [bountyId: BytesLike],
     [
-      [string, bigint, boolean, boolean] & {
+      [string, bigint, bigint, bigint, string] & {
         creator: string;
         amount: bigint;
-        funded: boolean;
-        paid: boolean;
+        deadline: bigint;
+        status: bigint;
+        winner: string;
       }
     ],
     "view"
+  >;
+
+  refundExpiredBounty: TypedContractMethod<
+    [bountyId: BytesLike],
+    [void],
+    "nonpayable"
   >;
 
   releasePrize: TypedContractMethod<
@@ -193,19 +321,23 @@ export interface BountyEscrow extends BaseContract {
   ): TypedContractMethod<
     [arg0: BytesLike],
     [
-      [string, bigint, boolean, boolean] & {
+      [string, bigint, bigint, bigint, string] & {
         creator: string;
         amount: bigint;
-        funded: boolean;
-        paid: boolean;
+        deadline: bigint;
+        status: bigint;
+        winner: string;
       }
     ],
     "view"
   >;
   getFunction(
+    nameOrSignature: "cancelBounty"
+  ): TypedContractMethod<[bountyId: BytesLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "depositBounty"
   ): TypedContractMethod<
-    [bountyId: BytesLike, amount: BigNumberish],
+    [bountyId: BytesLike, amount: BigNumberish, deadline: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -214,15 +346,19 @@ export interface BountyEscrow extends BaseContract {
   ): TypedContractMethod<
     [bountyId: BytesLike],
     [
-      [string, bigint, boolean, boolean] & {
+      [string, bigint, bigint, bigint, string] & {
         creator: string;
         amount: bigint;
-        funded: boolean;
-        paid: boolean;
+        deadline: bigint;
+        status: bigint;
+        winner: string;
       }
     ],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "refundExpiredBounty"
+  ): TypedContractMethod<[bountyId: BytesLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "releasePrize"
   ): TypedContractMethod<
@@ -235,6 +371,20 @@ export interface BountyEscrow extends BaseContract {
   ): TypedContractMethod<[], [string], "view">;
 
   getEvent(
+    key: "BountyCancelled"
+  ): TypedContractEvent<
+    BountyCancelledEvent.InputTuple,
+    BountyCancelledEvent.OutputTuple,
+    BountyCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "BountyCreated"
+  ): TypedContractEvent<
+    BountyCreatedEvent.InputTuple,
+    BountyCreatedEvent.OutputTuple,
+    BountyCreatedEvent.OutputObject
+  >;
+  getEvent(
     key: "BountyFunded"
   ): TypedContractEvent<
     BountyFundedEvent.InputTuple,
@@ -242,15 +392,51 @@ export interface BountyEscrow extends BaseContract {
     BountyFundedEvent.OutputObject
   >;
   getEvent(
-    key: "PrizeReleased"
+    key: "BountyRefunded"
   ): TypedContractEvent<
-    PrizeReleasedEvent.InputTuple,
-    PrizeReleasedEvent.OutputTuple,
-    PrizeReleasedEvent.OutputObject
+    BountyRefundedEvent.InputTuple,
+    BountyRefundedEvent.OutputTuple,
+    BountyRefundedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RewardReleased"
+  ): TypedContractEvent<
+    RewardReleasedEvent.InputTuple,
+    RewardReleasedEvent.OutputTuple,
+    RewardReleasedEvent.OutputObject
+  >;
+  getEvent(
+    key: "WinnerSelected"
+  ): TypedContractEvent<
+    WinnerSelectedEvent.InputTuple,
+    WinnerSelectedEvent.OutputTuple,
+    WinnerSelectedEvent.OutputObject
   >;
 
   filters: {
-    "BountyFunded(bytes32,address,uint256)": TypedContractEvent<
+    "BountyCancelled(bytes32,address,uint256)": TypedContractEvent<
+      BountyCancelledEvent.InputTuple,
+      BountyCancelledEvent.OutputTuple,
+      BountyCancelledEvent.OutputObject
+    >;
+    BountyCancelled: TypedContractEvent<
+      BountyCancelledEvent.InputTuple,
+      BountyCancelledEvent.OutputTuple,
+      BountyCancelledEvent.OutputObject
+    >;
+
+    "BountyCreated(bytes32,address,uint256,uint256)": TypedContractEvent<
+      BountyCreatedEvent.InputTuple,
+      BountyCreatedEvent.OutputTuple,
+      BountyCreatedEvent.OutputObject
+    >;
+    BountyCreated: TypedContractEvent<
+      BountyCreatedEvent.InputTuple,
+      BountyCreatedEvent.OutputTuple,
+      BountyCreatedEvent.OutputObject
+    >;
+
+    "BountyFunded(bytes32,address,uint256,uint256)": TypedContractEvent<
       BountyFundedEvent.InputTuple,
       BountyFundedEvent.OutputTuple,
       BountyFundedEvent.OutputObject
@@ -261,15 +447,37 @@ export interface BountyEscrow extends BaseContract {
       BountyFundedEvent.OutputObject
     >;
 
-    "PrizeReleased(bytes32,address,uint256)": TypedContractEvent<
-      PrizeReleasedEvent.InputTuple,
-      PrizeReleasedEvent.OutputTuple,
-      PrizeReleasedEvent.OutputObject
+    "BountyRefunded(bytes32,address,uint256)": TypedContractEvent<
+      BountyRefundedEvent.InputTuple,
+      BountyRefundedEvent.OutputTuple,
+      BountyRefundedEvent.OutputObject
     >;
-    PrizeReleased: TypedContractEvent<
-      PrizeReleasedEvent.InputTuple,
-      PrizeReleasedEvent.OutputTuple,
-      PrizeReleasedEvent.OutputObject
+    BountyRefunded: TypedContractEvent<
+      BountyRefundedEvent.InputTuple,
+      BountyRefundedEvent.OutputTuple,
+      BountyRefundedEvent.OutputObject
+    >;
+
+    "RewardReleased(bytes32,address,uint256)": TypedContractEvent<
+      RewardReleasedEvent.InputTuple,
+      RewardReleasedEvent.OutputTuple,
+      RewardReleasedEvent.OutputObject
+    >;
+    RewardReleased: TypedContractEvent<
+      RewardReleasedEvent.InputTuple,
+      RewardReleasedEvent.OutputTuple,
+      RewardReleasedEvent.OutputObject
+    >;
+
+    "WinnerSelected(bytes32,address,uint256)": TypedContractEvent<
+      WinnerSelectedEvent.InputTuple,
+      WinnerSelectedEvent.OutputTuple,
+      WinnerSelectedEvent.OutputObject
+    >;
+    WinnerSelected: TypedContractEvent<
+      WinnerSelectedEvent.InputTuple,
+      WinnerSelectedEvent.OutputTuple,
+      WinnerSelectedEvent.OutputObject
     >;
   };
 }

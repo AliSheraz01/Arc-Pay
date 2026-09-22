@@ -856,52 +856,129 @@ app.get('/api/users/:address', async (req, res) => {
   }
 });
 
-// Resolve EasyZPay username to address
+// Resolve EasyZPay username or connected X handle to address
 app.get('/api/resolve/:username', async (req, res) => {
   try {
     let { username } = req.params;
+    let isXLookup = false;
+
     if (username.startsWith('@')) {
       username = username.substring(1);
     }
+    if (username.toLowerCase().startsWith('x:') || username.toLowerCase().startsWith('x/')) {
+      isXLookup = true;
+      username = username.substring(2);
+      if (username.startsWith('@')) username = username.substring(1);
+    }
+
     const cleanUsername = username.toLowerCase().trim();
-    
-    // 1. Try database lookup first
-    const user = await prisma.user.findUnique({
-      where: { username: cleanUsername }
-    });
-    
-    if (user) {
-      return res.json({ address: user.address });
-    }
 
-    // 2. Fallback to querying the blockchain directly
-    console.log(`[Resolve] Username @${cleanUsername} not in DB, querying blockchain...`);
-    const resolvedAddress = await viemClient.readContract({
-      address: REGISTRY_ADDRESS,
-      abi: [
-        {
-          name: 'resolveUsername',
-          type: 'function',
-          stateMutability: 'view',
-          inputs: [{ name: '_username', type: 'string' }],
-          outputs: [{ name: '', type: 'address' }],
-        }
-      ] as const,
-      functionName: 'resolveUsername',
-      args: [cleanUsername],
-    });
-
-    if (resolvedAddress && resolvedAddress !== '0x0000000000000000000000000000000000000000') {
-      console.log(`[Resolve] Successfully resolved @${cleanUsername} to ${resolvedAddress} on-chain!`);
-      await prisma.user.upsert({
-        where: { address: (resolvedAddress as string).toLowerCase() },
-        update: { username: cleanUsername },
-        create: { address: (resolvedAddress as string).toLowerCase(), username: cleanUsername }
+    // 1. Direct X username lookup if explicitly requested
+    if (isXLookup) {
+      const socialAccount = await prisma.socialAccount.findFirst({
+        where: { provider: 'x', username: cleanUsername },
+        include: { user: true }
       });
-      return res.json({ address: resolvedAddress });
+      if (socialAccount && socialAccount.user?.address) {
+        return res.json({
+          found: true,
+          registered: true,
+          type: 'x',
+          address: socialAccount.user.address,
+          walletAddress: socialAccount.user.address,
+          xUsername: socialAccount.username,
+          displayName: socialAccount.displayName || `@${socialAccount.username}`,
+          avatar: socialAccount.avatar
+        });
+      }
+      return res.status(404).json({
+        found: false,
+        registered: false,
+        type: 'x',
+        xUsername: cleanUsername,
+        error: `X user @${cleanUsername} is not connected to EasyZPay`
+      });
+    }
+
+    // 2. Try EasyZPay database lookup first
+    const user = await prisma.user.findUnique({
+      where: { username: cleanUsername },
+      include: { socialAccounts: true }
+    });
+    
+    if (user && user.address) {
+      const xAcc = user.socialAccounts.find(a => a.provider === 'x');
+      return res.json({
+        found: true,
+        registered: true,
+        type: 'easyzpay',
+        address: user.address,
+        walletAddress: user.address,
+        username: user.username,
+        xUsername: xAcc?.username || null,
+        displayName: xAcc?.displayName || (user.username ? `@${user.username}` : user.address),
+        avatar: xAcc?.avatar || null
+      });
+    }
+
+    // 3. Fallback to querying the blockchain directly
+    console.log(`[Resolve] Username @${cleanUsername} not in DB, querying on-chain registry...`);
+    try {
+      const resolvedAddress = await viemClient.readContract({
+        address: REGISTRY_ADDRESS,
+        abi: [
+          {
+            name: 'resolveUsername',
+            type: 'function',
+            stateMutability: 'view',
+            inputs: [{ name: '_username', type: 'string' }],
+            outputs: [{ name: '', type: 'address' }],
+          }
+        ] as const,
+        functionName: 'resolveUsername',
+        args: [cleanUsername],
+      });
+
+      if (resolvedAddress && resolvedAddress !== '0x0000000000000000000000000000000000000000' && isAddress(resolvedAddress)) {
+        console.log(`[Resolve] Successfully resolved @${cleanUsername} to ${resolvedAddress} on-chain!`);
+        await prisma.user.upsert({
+          where: { address: (resolvedAddress as string).toLowerCase() },
+          update: { username: cleanUsername },
+          create: { address: (resolvedAddress as string).toLowerCase(), username: cleanUsername }
+        });
+        return res.json({
+          found: true,
+          registered: true,
+          type: 'easyzpay',
+          address: resolvedAddress,
+          walletAddress: resolvedAddress,
+          username: cleanUsername,
+          displayName: `@${cleanUsername}`
+        });
+      }
+    } catch (onChainErr) {
+      console.warn('[Resolve] On-chain readContract failed:', onChainErr);
+    }
+
+    // 4. Fallback: check if matches any connected X handle
+    const fallbackSocial = await prisma.socialAccount.findFirst({
+      where: { provider: 'x', username: cleanUsername },
+      include: { user: true }
+    });
+    if (fallbackSocial && fallbackSocial.user?.address) {
+      return res.json({
+        found: true,
+        registered: true,
+        type: 'x',
+        address: fallbackSocial.user.address,
+        walletAddress: fallbackSocial.user.address,
+        xUsername: fallbackSocial.username,
+        displayName: fallbackSocial.displayName || `@${fallbackSocial.username}`,
+        avatar: fallbackSocial.avatar
+      });
     }
     
-    return res.status(404).json({ error: 'Username not found' });
+    return res.status(404).json({ found: false, registered: false, error: 'Username not found' });
   } catch (error) {
     console.error('Resolve error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -1003,24 +1080,19 @@ app.get('/api/requests/:address', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BLOCKCHAIN EVENT INDEXER (OPTION A)
+// BLOCKCHAIN EVENT INDEXER (PRODUCTION ARC MAINNET / TESTNET)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Contracts deployed on May 19, 2026 — skip empty blocks before that
-const START_BLOCK = 44800000n;
-const RPC_URL = process.env.RPC_URL || 'https://rpc.testnet.arc.network';
-const REGISTRY_ADDRESS = (process.env.REGISTRY_ADDRESS || '0x08EAda9790495804329E0234464fd86CA4b35ff2') as `0x${string}`;
-const ROUTER_ADDRESS = (process.env.ROUTER_ADDRESS || '0x71157874BBD90389A429714815454C64FE061F1c') as `0x${string}`;
+const IS_MAINNET = (process.env.NETWORK_MODE || process.env.NEXT_PUBLIC_NETWORK || 'mainnet') === 'mainnet';
+const CHAIN_ID = IS_MAINNET ? 5042 : 5042002;
+const RPC_URL = process.env.RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_MAINNET ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network');
+const EXPLORER_URL = IS_MAINNET ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
+const START_BLOCK = process.env.START_BLOCK ? BigInt(process.env.START_BLOCK) : (IS_MAINNET ? 1n : 44800000n);
+
+const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || process.env.REGISTRY_ADDRESS || '0x1000000000000000000000000000000000000001') as `0x${string}`;
+const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_PAYMENT_ROUTER || process.env.ROUTER_ADDRESS || '0x2000000000000000000000000000000000000002') as `0x${string}`;
 const BULK_ROUTER_ADDRESS = (process.env.BULK_ROUTER_ADDRESS || '0xB1a346132F5eC1Ad7CC8A84DE33A2763d13110B4') as `0x${string}`;
-const REGISTRY_ABI = [
-  {
-    name: 'registerUsername',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: '_username', type: 'string' }],
-    outputs: [],
-  },
-] as const;
+const BOUNTY_ESCROW_ADDRESS = (process.env.NEXT_PUBLIC_BOUNTY_ESCROW || process.env.BOUNTY_ESCROW_ADDRESS || '0x3000000000000000000000000000000000000003') as `0x${string}`;
 
 const viemClient = createPublicClient({
   transport: http(RPC_URL),
@@ -1071,8 +1143,8 @@ async function indexUsernames(fromBlock: bigint, toBlock: bigint) {
         type: 'event',
         name: 'UsernameRegistered',
         inputs: [
-          { name: 'username', type: 'string', indexed: true },
-          { name: 'userAddress', type: 'address', indexed: true }
+          { name: 'owner', type: 'address', indexed: true },
+          { name: 'username', type: 'string', indexed: false }
         ]
       },
       fromBlock,
@@ -1080,30 +1152,20 @@ async function indexUsernames(fromBlock: bigint, toBlock: bigint) {
     });
 
     for (const log of logs) {
-      const { transactionHash, blockNumber } = log;
+      const { transactionHash } = log;
       if (!transactionHash) continue;
       
-      try {
-        const tx = await viemClient.getTransaction({ hash: transactionHash });
-        const decoded = decodeFunctionData({
-          abi: REGISTRY_ABI,
-          data: tx.input
+      const userAddress = log.args.owner?.toLowerCase();
+      const rawUsername = log.args.username;
+      const username = rawUsername?.toLowerCase().trim().replace('@', '');
+      
+      if (username && userAddress) {
+        console.log(`[Indexer] Registry Sync: @${username} registered to ${userAddress} in tx ${transactionHash}`);
+        await prisma.user.upsert({
+          where: { address: userAddress },
+          update: { username },
+          create: { address: userAddress, username }
         });
-        
-        const rawUsername = decoded.args?.[0] as string;
-        const username = rawUsername?.toLowerCase().trim().replace('@', '');
-        const userAddress = log.args.userAddress?.toLowerCase();
-        
-        if (username && userAddress) {
-          console.log(`[Indexer] Registry Sync: @${username} registered to ${userAddress} in tx ${transactionHash}`);
-          await prisma.user.upsert({
-            where: { address: userAddress },
-            update: { username },
-            create: { address: userAddress, username }
-          });
-        }
-      } catch (decodeErr) {
-        console.error(`[Indexer] Could not decode registry tx input:`, decodeErr);
       }
     }
   } catch (err) {
@@ -1149,7 +1211,6 @@ async function indexPayments(fromBlock: bigint, toBlock: bigint) {
           txHash: transactionHash,
           toAddress,
           amount,
-          memo,
         }
       });
 
@@ -1162,11 +1223,11 @@ async function indexPayments(fromBlock: bigint, toBlock: bigint) {
             amount,
             memo,
             token: 'USDC',
-            chainId: 5042002,
+            chainId: CHAIN_ID,
             type: 'SEND',
-            status: 'CONFIRMED',
+            status: 'COMPLETED',
             blockNumber: Number(blockNumber),
-            explorerUrl: `https://testnet.arcscan.app/tx/${transactionHash}`,
+            explorerUrl: `${EXPLORER_URL}/tx/${transactionHash}`,
             timestamp,
             confirmedAt: timestamp
           }
@@ -1200,6 +1261,119 @@ async function indexPayments(fromBlock: bigint, toBlock: bigint) {
   }
 }
 
+async function indexBounties(fromBlock: bigint, toBlock: bigint) {
+  try {
+    // 1. BountyFunded event
+    const fundedLogs = await viemClient.getLogs({
+      address: BOUNTY_ESCROW_ADDRESS,
+      event: {
+        type: 'event',
+        name: 'BountyFunded',
+        inputs: [
+          { name: 'bountyId', type: 'bytes32', indexed: true },
+          { name: 'creator', type: 'address', indexed: true },
+          { name: 'amount', type: 'uint256', indexed: false },
+          { name: 'deadline', type: 'uint256', indexed: false }
+        ]
+      },
+      fromBlock,
+      toBlock
+    });
+
+    for (const log of fundedLogs) {
+      const { transactionHash, blockNumber } = log;
+      const bHash = log.args.bountyId?.toLowerCase();
+      const creator = log.args.creator?.toLowerCase();
+      const amount = log.args.amount ? log.args.amount.toString() : '0';
+
+      if (!bHash || !creator) continue;
+      console.log(`[Indexer] Bounty Escrow Funded: hash=${bHash}, amount=${amount} in tx ${transactionHash}`);
+
+      const timestamp = await getBlockTimestamp(blockNumber!);
+
+      // Update matching bounty record if present
+      await prisma.bounty.updateMany({
+        where: {
+          OR: [
+            { bountyHash: bHash },
+            { creatorAddress: creator, escrowStatus: 'UNFUNDED' }
+          ]
+        },
+        data: {
+          bountyHash: bHash,
+          escrowStatus: 'FUNDED',
+          status: 'OPEN',
+          fundTxHash: transactionHash
+        }
+      });
+    }
+
+    // 2. RewardReleased event
+    const releasedLogs = await viemClient.getLogs({
+      address: BOUNTY_ESCROW_ADDRESS,
+      event: {
+        type: 'event',
+        name: 'RewardReleased',
+        inputs: [
+          { name: 'bountyId', type: 'bytes32', indexed: true },
+          { name: 'winner', type: 'address', indexed: true },
+          { name: 'amount', type: 'uint256', indexed: false }
+        ]
+      },
+      fromBlock,
+      toBlock
+    });
+
+    for (const log of releasedLogs) {
+      const { transactionHash, blockNumber } = log;
+      const bHash = log.args.bountyId?.toLowerCase();
+      const winner = log.args.winner?.toLowerCase();
+      const amount = log.args.amount ? log.args.amount.toString() : '0';
+
+      if (!bHash || !winner) continue;
+      console.log(`[Indexer] Bounty Prize Released: hash=${bHash}, winner=${winner} in tx ${transactionHash}`);
+
+      const timestamp = await getBlockTimestamp(blockNumber!);
+
+      await prisma.bounty.updateMany({
+        where: { bountyHash: bHash },
+        data: {
+          escrowStatus: 'PAID',
+          status: 'COMPLETED',
+          winnerAddress: winner,
+          rewardTxHash: transactionHash
+        }
+      });
+
+      // Record in unified transaction history
+      const exists = await prisma.transaction.findFirst({
+        where: { txHash: transactionHash, toAddress: winner }
+      });
+      if (!exists) {
+        await prisma.transaction.create({
+          data: {
+            txHash: transactionHash,
+            fromAddress: BOUNTY_ESCROW_ADDRESS.toLowerCase(),
+            toAddress: winner,
+            amount,
+            memo: 'Bounty Reward Paid',
+            token: 'USDC',
+            chainId: CHAIN_ID,
+            type: 'BOUNTY',
+            status: 'COMPLETED',
+            blockNumber: Number(blockNumber),
+            explorerUrl: `${EXPLORER_URL}/tx/${transactionHash}`,
+            timestamp,
+            confirmedAt: timestamp
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`[Indexer] Error fetching bounty escrow logs:`, err);
+  }
+}
+
 async function startIndexer() {
   console.log(`[Indexer] Initializing event indexer from block ${START_BLOCK}...`);
   
@@ -1225,6 +1399,7 @@ async function startIndexer() {
           
           await indexUsernames(currentFrom, currentTo);
           await indexPayments(currentFrom, currentTo);
+          await indexBounties(currentFrom, currentTo);
           
           await setSyncState('lastIndexedBlock', currentTo);
           chunksProcessed++;
@@ -1385,56 +1560,151 @@ app.post('/api/party/:id/pay', async (req, res) => {
 });
 
 // ==========================================
-// BOUNTY ROUTES
+// BOUNTY ROUTES (ON-CHAIN ESCROW MARKETPLACE)
 // ==========================================
 app.post('/api/bounties', async (req, res) => {
   try {
-    const { title, description, creatorAddress, prizeAmount } = req.body;
-    if (!title || !creatorAddress || !prizeAmount) return res.status(400).json({ error: 'Missing fields' });
-    const bounty = await prisma.bounty.create({ data: { title, description, creatorAddress: creatorAddress.toLowerCase(), prizeAmount, status: 'OPEN' } });
+    const { 
+      title, 
+      description, 
+      creatorAddress, 
+      prizeAmount, 
+      tasks, 
+      deadline, 
+      requirements, 
+      category, 
+      difficulty,
+      bountyHash 
+    } = req.body;
+
+    if (!title || !creatorAddress || !prizeAmount) {
+      return res.status(400).json({ error: 'Missing required fields: title, creatorAddress, prizeAmount' });
+    }
+
+    const bounty = await prisma.bounty.create({ 
+      data: { 
+        title, 
+        description: description || '', 
+        creatorAddress: creatorAddress.toLowerCase(), 
+        prizeAmount: prizeAmount.toString(),
+        tasks: typeof tasks === 'string' ? tasks : JSON.stringify(tasks || []),
+        deadline: deadline ? new Date(deadline) : null,
+        requirements: typeof requirements === 'string' ? requirements : JSON.stringify(requirements || []),
+        category: category || 'General',
+        difficulty: difficulty || 'Medium',
+        bountyHash: bountyHash || null,
+        status: 'OPEN',
+        escrowStatus: 'UNFUNDED'
+      } 
+    });
     res.json(bounty);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { 
+    console.error('[Create Bounty] Error:', e);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.get('/api/bounties', async (req, res) => {
   try {
-    const bounties = await prisma.bounty.findMany({ include: { submissions: true }, orderBy: { createdAt: 'desc' } });
+    const bounties = await prisma.bounty.findMany({ 
+      include: { submissions: true }, 
+      orderBy: { createdAt: 'desc' } 
+    });
     res.json(bounties);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.get('/api/bounties/:id', async (req, res) => {
   try {
-    const bounty = await prisma.bounty.findUnique({ where: { id: req.params.id }, include: { submissions: true } });
-    if (!bounty) return res.status(404).json({ error: 'Not found' });
+    const bounty = await prisma.bounty.findUnique({ 
+      where: { id: req.params.id }, 
+      include: { submissions: true } 
+    });
+    if (!bounty) return res.status(404).json({ error: 'Bounty not found' });
     res.json(bounty);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/bounties/:id/fund', async (req, res) => {
   try {
-    const { txHash } = req.body;
-    const bounty = await prisma.bounty.update({ where: { id: req.params.id }, data: { fundTxHash: txHash } });
+    const { txHash, bountyHash } = req.body;
+    const bounty = await prisma.bounty.update({ 
+      where: { id: req.params.id }, 
+      data: { 
+        fundTxHash: txHash,
+        bountyHash: bountyHash || undefined,
+        escrowStatus: 'FUNDED',
+        status: 'OPEN'
+      } 
+    });
     res.json(bounty);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/bounties/:id/submit', async (req, res) => {
   try {
-    const { submitterAddress, content } = req.body;
-    if (!submitterAddress || !content) return res.status(400).json({ error: 'Missing fields' });
-    const sub = await prisma.bountySubmission.create({ data: { bountyId: req.params.id, submitterAddress: submitterAddress.toLowerCase(), content } });
+    const { submitterAddress, content, links } = req.body;
+    if (!submitterAddress || !content) {
+      return res.status(400).json({ error: 'Missing required submitterAddress or content' });
+    }
+    const sub = await prisma.bountySubmission.create({ 
+      data: { 
+        bountyId: req.params.id, 
+        submitterAddress: submitterAddress.toLowerCase(), 
+        content,
+        links: links ? (typeof links === 'string' ? links : JSON.stringify(links)) : null,
+        status: 'PENDING'
+      } 
+    });
     res.json(sub);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post('/api/bounties/:id/select-winner', async (req, res) => {
   try {
-    const { submissionId, rewardAmount, rewardTxHash } = req.body;
-    await prisma.bountySubmission.update({ where: { id: submissionId }, data: { status: 'WINNER', rewardAmount, rewardTxHash } });
-    await prisma.bounty.update({ where: { id: req.params.id }, data: { status: 'COMPLETED' } });
-    res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    const { submissionId, rewardAmount, rewardTxHash, winnerAddress } = req.body;
+    await prisma.bountySubmission.update({ 
+      where: { id: submissionId }, 
+      data: { status: 'WINNER', rewardAmount, rewardTxHash } 
+    });
+    const bounty = await prisma.bounty.update({ 
+      where: { id: req.params.id }, 
+      data: { 
+        status: 'COMPLETED',
+        escrowStatus: 'PAID',
+        winnerAddress: winnerAddress?.toLowerCase() || null,
+        rewardTxHash 
+      } 
+    });
+    res.json({ success: true, bounty });
+  } catch (e: any) { 
+    res.status(500).json({ error: e.message }); 
+  }
+});
+
+app.post('/api/bounties/:id/cancel', async (req, res) => {
+  try {
+    const { refundTxHash } = req.body;
+    const bounty = await prisma.bounty.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'CANCELLED',
+        escrowStatus: 'REFUNDED',
+        refundTxHash: refundTxHash || null
+      }
+    });
+    res.json({ success: true, bounty });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Start Server

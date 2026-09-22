@@ -1,0 +1,10 @@
+{
+  "network": "arc_mainnet",
+  "chainId": 5042,
+  "usdcAddress": "0x3600000000000000000000000000000000000000",
+  "registryAddress": "0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D",
+  "routerAddress": "0x1C1F89F6Cc9b65eddE36D9F7fbd0222D53A158d6",
+  "bountyEscrowAddress": "0x7BF7557F1BBAfB44865B5Ce8661806352774737E",
+  "deployedAt": "2026-09-22T21:43:34.323Z",
+  "deployer": "0xB8e9C9659677511Be855A8582c028F3ae6d108D4"
+}

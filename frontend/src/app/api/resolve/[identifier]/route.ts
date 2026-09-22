@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http, isAddress } from 'viem'
-import { ACTIVE_CHAIN, REGISTRY_ADDRESS } from '@/lib/constants'
+import { ACTIVE_CHAIN, REGISTRY_ADDRESS, IS_PRODUCTION } from '@/lib/constants'
 import { REGISTRY_ABI } from '@/lib/abi'
 
 // In-memory store for connected social accounts in serverless runtime

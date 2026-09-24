@@ -153,22 +153,27 @@ export const TOKEN_MESSENGER_ABI = [
       { name: 'amount', type: 'uint256' },
       { name: 'destinationDomain', type: 'uint32' },
       { name: 'mintRecipient', type: 'bytes32' },
-      { name: 'burnToken', type: 'address' }
+      { name: 'burnToken', type: 'address' },
+      { name: 'destinationCaller', type: 'bytes32' },
+      { name: 'maxFee', type: 'uint256' },
+      { name: 'minFinalityThreshold', type: 'uint32' }
     ],
-    outputs: [{ name: '_nonce', type: 'uint64' }]
+    outputs: []
   },
   {
     name: 'DepositForBurn',
     type: 'event',
     inputs: [
-      { name: 'nonce', type: 'uint64', indexed: true },
-      { name: 'burnToken', type: 'address', indexed: true },
+      { name: 'burnToken', type: 'address', indexed: false },
       { name: 'amount', type: 'uint256', indexed: false },
-      { name: 'depositor', type: 'address', indexed: true },
+      { name: 'depositor', type: 'address', indexed: false },
       { name: 'mintRecipient', type: 'bytes32', indexed: false },
       { name: 'destinationDomain', type: 'uint32', indexed: false },
       { name: 'destinationTokenMessenger', type: 'bytes32', indexed: false },
-      { name: 'destinationCaller', type: 'bytes32', indexed: false }
+      { name: 'destinationCaller', type: 'bytes32', indexed: false },
+      { name: 'maxFee', type: 'uint256', indexed: false },
+      { name: 'minFinalityThreshold', type: 'uint32', indexed: false },
+      { name: 'hookData', type: 'bytes', indexed: false }
     ]
   }
 ] as const

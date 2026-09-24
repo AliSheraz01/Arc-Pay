@@ -26,6 +26,7 @@ export {
 }
 
 // Active Network Constants
+export const RPC_URL = ACTIVE_RPC_URL
 export const ARC_CHAIN_ID = ACTIVE_CHAIN_ID
 
 export const USDC_ADDRESS = CONTRACTS.usdcAddress

@@ -453,6 +453,8 @@ function CctpTransferEngine() {
       const mintRecipientBytes32 = addressToBytes32(targetAddr)
       const destinationDomain = toChain.domain
 
+      const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
+
       const burnTxHash = await writeDeposit({
         address: fromChain.tokenMessenger,
         abi: TOKEN_MESSENGER_ABI,
@@ -462,6 +464,9 @@ function CctpTransferEngine() {
           destinationDomain,
           mintRecipientBytes32,
           fromChain.usdc,
+          ZERO_BYTES32,     // destinationCaller: 0x0 = anyone can call receiveMessage
+          0n,               // maxFee: 0 = Standard Transfer
+          2000,             // minFinalityThreshold: 2000 = Standard Transfer (finalized)
         ],
       })
 
@@ -509,10 +514,8 @@ function CctpTransferEngine() {
         status: 'attestation_pending' 
       } : null)
 
-      // 5. Poll Circle Iris Attestation API via backend
-      if (msgHash) {
-        pollCircleAttestation(msgHash, rawMessage, currentTransfer)
-      }
+      // 5. Poll Circle Iris Attestation API via backend (CCTP V2)
+      pollCircleAttestation(fromChain.domain, burnTxHash, rawMessage, currentTransfer)
     } catch (err: any) {
       console.error('CCTP Execution error:', err)
       const reason = err.message?.slice(0, 120) || 'Transaction failed'
@@ -523,8 +526,9 @@ function CctpTransferEngine() {
 
   // Poll Circle Attestation until status === 'complete'
   const pollCircleAttestation = async (
-    msgHash: `0x${string}`, 
-    rawMessage: `0x${string}` | null, 
+    sourceDomainId: number,
+    txHash: `0x${string}`,
+    rawMessageFallback: `0x${string}` | null,
     baseTransfer: InFlightCrossPay
   ) => {
     let attempts = 0
@@ -536,7 +540,7 @@ function CctpTransferEngine() {
         const res = await fetch(`${BACKEND_URL}/api/cctp/attestation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageHash: msgHash }),
+          body: JSON.stringify({ sourceDomainId, transactionHash: txHash }),
         })
         const data = await res.json()
 
@@ -544,6 +548,7 @@ function CctpTransferEngine() {
           clearInterval(checkInterval)
           setTransferState(prev => prev ? {
             ...prev,
+            cctpMessage: (data.message as `0x${string}`) || rawMessageFallback || prev.cctpMessage,
             attestationBytes: data.attestation,
             status: 'attestation_received'
           } : null)

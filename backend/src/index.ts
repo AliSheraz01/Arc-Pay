@@ -26,11 +26,21 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Environment & Network configuration
-const NETWORK_MODE = process.env.NETWORK_MODE || 'testnet';
-const IRIS_API_URL = NETWORK_MODE === 'mainnet' 
+// Environment & Network configuration — single source of truth
+const NETWORK_MODE: 'mainnet' | 'testnet' =
+  (process.env.NETWORK_MODE || process.env.NEXT_PUBLIC_NETWORK || 'mainnet') === 'testnet'
+    ? 'testnet'
+    : 'mainnet';
+const IS_MAINNET = NETWORK_MODE === 'mainnet';
+const IRIS_API_URL = IS_MAINNET
   ? 'https://iris-api.circle.com'
   : 'https://iris-api-sandbox.circle.com';
+const CHAIN_ID = IS_MAINNET ? 5042 : 5042002;
+const RPC_URL = process.env.RPC_URL || (IS_MAINNET ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network');
+const EXPLORER_URL = IS_MAINNET ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
+const REGISTRY_ADDRESS_BACKEND = IS_MAINNET
+  ? (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || '0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D')
+  : (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS || '0x7182B6A65522dbb7ae88507F296Bdd65cdc1FFdB');
 
 // Basic health check
 app.get('/health', (req, res) => {
@@ -48,29 +58,23 @@ app.get('/health', (req, res) => {
 
 // Official Circle Iris Attestation Proxy (Never mocks, queries Circle Iris API)
 app.post('/api/cctp/attestation', async (req, res) => {
-  const { messageHash } = req.body;
-  if (!messageHash) {
-    return res.status(400).json({ error: 'messageHash is required' });
+  const { sourceDomainId, transactionHash } = req.body;
+  if (sourceDomainId === undefined || !transactionHash) {
+    return res.status(400).json({ error: 'sourceDomainId and transactionHash are required' });
   }
-
   try {
-    const cleanHash = messageHash.startsWith('0x') ? messageHash : `0x${messageHash}`;
-    const circleResponse = await fetch(`${IRIS_API_URL}/attestations/${cleanHash}`, {
-      headers: { 'Accept': 'application/json' }
-    });
-
-    if (circleResponse.status === 404) {
-      return res.json({ status: 'pending', attestation: null });
-    }
-
+    const url = `${IRIS_API_URL}/v2/messages/${sourceDomainId}?transactionHash=${transactionHash}`;
+    const circleResponse = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!circleResponse.ok) {
-      return res.json({ status: 'pending', attestation: null });
+      return res.json({ status: 'pending', attestation: null, message: null });
     }
-
     const data: any = await circleResponse.json();
+    const msg = data.messages && data.messages[0];
+    if (!msg) return res.json({ status: 'pending', attestation: null, message: null });
     return res.json({
-      status: data.status || 'pending',
-      attestation: data.attestation || null
+      status: msg.status === 'complete' ? 'complete' : 'pending',
+      attestation: msg.status === 'complete' ? msg.attestation : null,
+      message: msg.message || null,
     });
   } catch (error: any) {
     console.error('[CCTP Attestation] Fetch error:', error);
@@ -1426,12 +1430,12 @@ async function startIndexer() {
 // SCHEDULER CRON JOB
 // ==========================================
 
-const arcTestnet = defineChain({
-  id: 5042002,
-  name: 'Arc Testnet',
-  network: 'arc_testnet',
-  nativeCurrency: { name: 'Arc', symbol: 'ARC', decimals: 18 },
-  rpcUrls: { default: { http: [process.env.RPC_URL || 'https://rpc.testnet.arc.network'] } },
+const keeperChain = defineChain({
+  id: CHAIN_ID,
+  name: IS_MAINNET ? 'Arc Mainnet' : 'Arc Testnet',
+  network: IS_MAINNET ? 'arc_mainnet' : 'arc_testnet',
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+  rpcUrls: { default: { http: [RPC_URL] } },
 });
 
 const KEEPER_PK = process.env.KEEPER_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -1440,8 +1444,8 @@ const SCHEDULER_ADDRESS = process.env.SCHEDULER_ADDRESS as `0x${string}`;
 const keeperAccount = privateKeyToAccount(KEEPER_PK as `0x${string}`);
 const keeperWalletClient = createWalletClient({
   account: keeperAccount,
-  chain: arcTestnet,
-  transport: http(process.env.RPC_URL || 'https://rpc.testnet.arc.network'),
+  chain: keeperChain,
+  transport: http(RPC_URL),
 });
 
 const schedulerABI = [

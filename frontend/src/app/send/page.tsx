@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, Suspense } from 'react'
-import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi'
 import { parseUnits, isAddress, createPublicClient, http } from 'viem'
 import { PageLayout } from '@/components/PageLayout'
 import { NetworkGuard } from '@/components/NetworkGuard'
@@ -33,6 +33,7 @@ function SendForm() {
   const [phase, setPhase] = useState<'idle' | 'approving' | 'sending'>('idle')
 
   const { writeContractAsync } = useWriteContract()
+  const publicClient = usePublicClient()
 
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS,
@@ -220,8 +221,14 @@ function SendForm() {
       })
       setApproveTxHash(approveTx)
 
-      // Wait briefly for approval
-      await new Promise(r => setTimeout(r, 3000))
+      // Wait for the approval to actually be mined before spending the
+      // allowance — no more fixed sleep / race condition.
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: approveTx })
+        if (receipt.status !== 'success') {
+          throw new Error('USDC approval transaction failed on-chain')
+        }
+      }
 
       setPhase('sending')
 

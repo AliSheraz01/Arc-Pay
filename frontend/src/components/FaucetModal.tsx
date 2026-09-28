@@ -2,9 +2,14 @@
 
 import { useState } from 'react'
 import { FAUCET_URL } from '@/lib/constants'
+import { useChainId } from 'wagmi'
 
 export function FaucetModal() {
   const [open, setOpen] = useState(false)
+  const chainId = useChainId()
+  const isMainnet = chainId === 5042
+
+  if (isMainnet) return null
 
   return (
     <>

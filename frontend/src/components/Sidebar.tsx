@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useChainId, useSwitchChain } from 'wagmi'
 import { 
   MdHome, 
   MdSend, 
@@ -14,11 +15,19 @@ import {
   MdPerson,
   MdLink,
   MdAutoAwesome,
+  MdSwapHoriz,
 } from 'react-icons/md'
 
 export function Sidebar() {
   const pathname = usePathname()
   const [theme, setTheme] = useState<'dark' | 'light'>('light')
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+
+  const ARC_MAINNET_ID = 5042
+  const ARC_TESTNET_ID = 5042002
+
+  const isMainnet = chainId === ARC_MAINNET_ID
 
   // Load theme on mount
   useEffect(() => {
@@ -36,6 +45,16 @@ export function Sidebar() {
     setTheme(nextTheme)
     localStorage.setItem('theme', nextTheme)
     document.documentElement.setAttribute('data-theme', nextTheme)
+  }
+
+  const handleSwitchNetwork = async () => {
+    if (!switchChainAsync) return
+    const targetChain = isMainnet ? ARC_TESTNET_ID : ARC_MAINNET_ID
+    try {
+      await switchChainAsync({ chainId: targetChain })
+    } catch (e) {
+      console.error('Failed to switch network', e)
+    }
   }
 
   const isCrossPayEnabled = process.env.NEXT_PUBLIC_ENABLE_CROSS_PAY === 'true'
@@ -147,57 +166,85 @@ export function Sidebar() {
         </div>
 
         {/* Bottom Panel */}
-        <div>
-          {/* Faucet Promo Card */}
-          <a
-            href="https://faucet.circle.com"
-            target="_blank"
-            rel="noreferrer"
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Network Switcher */}
+          <button
+            onClick={handleSwitchNetwork}
             style={{
               display: 'flex',
-              background: 'var(--accent-glow)',
-              border: '1px solid var(--border-accent)',
-              borderRadius: '16px',
-              padding: '16px',
-              marginBottom: '16px',
-              textDecoration: 'none',
-              color: 'var(--text-primary)',
-              position: 'relative',
-              overflow: 'hidden',
               alignItems: 'center',
-              gap: '12px',
+              justifyContent: 'space-between',
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--border)',
+              borderRadius: '16px',
+              padding: '12px 16px',
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
               transition: 'all 0.2s',
             }}
-            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-            onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+            onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
           >
-            <div style={{ flex: 1 }}>
-              <h4 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Need gas?</h4>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '11px', lineHeight: 1.4, marginBottom: '6px' }}>
-                Get test tokens from
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '12px', fontWeight: 800 }}>
-                <span>Arc Faucet</span>
-                <span style={{ fontSize: '12px' }}>→</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Current Network</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: isMainnet ? 'var(--accent)' : '#6b5bff' }}>
+                {isMainnet ? 'Arc Mainnet' : 'Arc Testnet'}
+              </span>
+            </div>
+            <MdSwapHoriz size={20} style={{ color: 'var(--text-muted)' }} />
+          </button>
+
+          {/* Faucet Promo Card - Hidden on Mainnet */}
+          {!isMainnet && (
+            <a
+              href="https://faucet.circle.com"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'flex',
+                background: 'var(--accent-glow)',
+                border: '1px solid var(--border-accent)',
+                borderRadius: '16px',
+                padding: '16px',
+                textDecoration: 'none',
+                color: 'var(--text-primary)',
+                position: 'relative',
+                overflow: 'hidden',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <div style={{ flex: 1 }}>
+                <h4 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>Need gas?</h4>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '11px', lineHeight: 1.4, marginBottom: '6px' }}>
+                  Get test tokens from
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent)', fontSize: '12px', fontWeight: 800 }}>
+                  <span>Arc Faucet</span>
+                  <span style={{ fontSize: '12px' }}>→</span>
+                </div>
               </div>
-            </div>
-            {/* Droplet Graphic */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '12px',
-              background: 'rgba(16, 53, 246, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--accent)',
-              flexShrink: 0,
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
-              </svg>
-            </div>
-          </a>
+              {/* Droplet Graphic */}
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '12px',
+                background: 'rgba(16, 53, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent)',
+                flexShrink: 0,
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                </svg>
+              </div>
+            </a>
+          )}
 
           {/* Theme switcher pill capsule */}
           <div style={{

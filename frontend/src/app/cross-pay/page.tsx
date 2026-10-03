@@ -17,7 +17,8 @@ import {
   REGISTRY_ADDRESS, 
   EXPLORER_URL,
   CctpChainConfig,
-  IS_PRODUCTION
+  IS_PRODUCTION,
+  ACTIVE_CHAIN
 } from '@/lib/constants'
 import { REGISTRY_ABI, USDC_ABI, TOKEN_MESSENGER_ABI, MESSAGE_TRANSMITTER_ABI } from '@/lib/abi'
 
@@ -283,9 +284,13 @@ function CctpTransferEngine() {
   // Resolve Recipient (@username, x/@username, or 0x address)
   const resolveRecipient = useCallback(async (val: string, mode: 'easyzpay' | 'x' | 'address' = recipientMode) => {
     setResolveError(null)
-    setResolvedAddress(null)
-    setResolvedName(null)
-    if (!val) return
+    if (!val || !val.trim()) {
+      // Only clear resolved address when input is truly empty
+      setResolvedAddress(null)
+      setResolvedName(null)
+      setResolving(false)
+      return
+    }
 
     const clean = val.trim()
 
@@ -384,14 +389,23 @@ function CctpTransferEngine() {
   // Pre-flight check before review
   const handleOpenReview = () => {
     setErrorMessage(null)
-    const targetAddr = resolvedAddress || (recipient.trim() === '' ? address : (isAddress(recipient.trim()) ? recipient.trim() as `0x${string}` : null))
+    
+    // Determine target address - NEVER silently default to sender
+    let targetAddr: `0x${string}` | null = null
+    if (resolvedAddress && isAddress(resolvedAddress)) {
+      targetAddr = resolvedAddress
+    } else if (recipient.trim() && isAddress(recipient.trim())) {
+      targetAddr = recipient.trim() as `0x${string}`
+    }
+    // If recipient field is empty, DO NOT default to sender's own address
+    // The user must explicitly enter a recipient for cross-chain transfers
 
     if (!amount || parseFloat(amount) <= 0) {
       setErrorMessage('Please enter a valid USDC amount greater than 0.')
       return
     }
 
-    if (!targetAddr || !isAddress(targetAddr)) {
+    if (!targetAddr) {
       setErrorMessage('Please provide a valid recipient username or 0x wallet address.')
       return
     }
@@ -410,8 +424,15 @@ function CctpTransferEngine() {
     setShowReviewModal(false)
     setErrorMessage(null)
 
-    const targetAddr = resolvedAddress || (recipient.trim() === '' ? (address as `0x${string}`) : (isAddress(recipient.trim()) ? recipient.trim() as `0x${string}` : null))
-    if (!targetAddr || !isAddress(targetAddr) || !address) {
+    // Determine target address - NEVER silently default to sender
+    let targetAddr: `0x${string}` | null = null
+    if (resolvedAddress && isAddress(resolvedAddress)) {
+      targetAddr = resolvedAddress
+    } else if (recipient.trim() && isAddress(recipient.trim())) {
+      targetAddr = recipient.trim() as `0x${string}`
+    }
+
+    if (!targetAddr || !address) {
       setErrorMessage('Recipient address is invalid. Cannot proceed with transfer.')
       return
     }
@@ -483,6 +504,21 @@ function CctpTransferEngine() {
       setTransferState(prev => prev ? { ...prev, status: 'burning' } : null)
       const mintRecipientBytes32 = addressToBytes32(targetAddr)
       const destinationDomain = toChain.domain
+
+      // CRITICAL SAFETY CHECK: Ensure we're not sending to the sender's own address
+      const senderBytes32 = addressToBytes32(address)
+      if (mintRecipientBytes32.toLowerCase() === senderBytes32.toLowerCase()) {
+        throw new Error('CCTP Safety: mintRecipient matches sender address. Cross-chain transfer must have a different recipient.')
+      }
+
+      console.log('[CCTP] depositForBurn args:', {
+        amount: parsedAmount.toString(),
+        destinationDomain,
+        mintRecipient: mintRecipientBytes32,
+        burnToken: fromChain.usdc,
+        targetAddr,
+        senderAddr: address,
+      })
 
       const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
 
@@ -870,7 +906,7 @@ function CctpTransferEngine() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Recipient</span>
                   <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
-                    {resolvedName || recipient || `${address?.slice(0, 8)}...${address?.slice(-6)}`}
+                    {resolvedName || (resolvedAddress ? `${resolvedAddress.slice(0, 8)}...${resolvedAddress.slice(-6)}` : recipient || 'Not set')}
                   </span>
                 </div>
               </div>

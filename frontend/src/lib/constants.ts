@@ -1,4 +1,5 @@
 // Centralized constants bridging to src/config/
+import { pad, isAddress } from 'viem'
 import { arcMainnet, arcTestnet } from '@/config/chains'
 import { 
   NETWORK_MODE, 
@@ -216,6 +217,10 @@ export function addressToBytes32(address: string): `0x${string}` {
   if (!address || typeof address !== 'string' || !address.startsWith('0x') || address.length !== 42) {
     throw new Error(`Invalid EVM address for CCTP conversion: "${address}"`)
   }
-  const clean = address.replace('0x', '').toLowerCase().padStart(64, '0')
-  return `0x${clean}` as `0x${string}`
+  if (!isAddress(address)) {
+    throw new Error(`Invalid EVM address checksum for CCTP conversion: "${address}"`)
+  }
+  // Official Circle CCTP encoding: left-pad 20-byte address to 32 bytes
+  // Uses viem's pad() as recommended by Circle developer docs
+  return pad(address as `0x${string}`, { size: 32 })
 }

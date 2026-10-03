@@ -52,6 +52,7 @@ export interface CctpChainConfig {
   rpcUrl: string
   explorerUrl: string
   color: string
+  logoUrl?: string
 }
 
 // Official Circle CCTP V2 Mainnet Configurations
@@ -67,7 +68,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://rpc.mainnet.arc.io',
     explorerUrl: 'https://explorer.arc.io',
-    color: '#1035f6'
+    color: '#1035f6',
+    logoUrl: 'https://explorer.arc.io/favicon.ico'
   },
   // Base Mainnet (Domain 6)
   8453: {
@@ -80,7 +82,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://mainnet.base.org',
     explorerUrl: 'https://basescan.org',
-    color: '#0052ff'
+    color: '#0052ff',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png'
   },
   // Ethereum Mainnet (Domain 0)
   1: {
@@ -93,7 +96,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://ethereum-rpc.publicnode.com',
     explorerUrl: 'https://etherscan.io',
-    color: '#627eea'
+    color: '#627eea',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png'
   },
   // Arbitrum One (Domain 3)
   42161: {
@@ -106,7 +110,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://arb1.arbitrum.io/rpc',
     explorerUrl: 'https://arbiscan.io',
-    color: '#28a0f0'
+    color: '#28a0f0',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png'
   },
   // OP Mainnet (Domain 2)
   10: {
@@ -119,7 +124,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://mainnet.optimism.io',
     explorerUrl: 'https://optimistic.etherscan.io',
-    color: '#ff0420'
+    color: '#ff0420',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png'
   },
   // Polygon PoS (Domain 7)
   137: {
@@ -132,7 +138,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://polygon-rpc.com',
     explorerUrl: 'https://polygonscan.com',
-    color: '#8247e5'
+    color: '#8247e5',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png'
   },
   // Avalanche C-Chain (Domain 1)
   43114: {
@@ -145,7 +152,8 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
     explorerUrl: 'https://snowtrace.io',
-    color: '#e84142'
+    color: '#e84142',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchex/info/logo.png'
   }
 }
 
@@ -161,7 +169,8 @@ export const CCTP_V2_TESTNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 18,
     rpcUrl: 'https://rpc.testnet.arc.network',
     explorerUrl: 'https://testnet.arcscan.app',
-    color: '#6b5bff'
+    color: '#6b5bff',
+    logoUrl: 'https://testnet.arcscan.app/favicon.ico'
   },
   84532: {
     chainId: 84532,
@@ -173,7 +182,8 @@ export const CCTP_V2_TESTNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://sepolia.base.org',
     explorerUrl: 'https://sepolia.basescan.org',
-    color: '#0052ff'
+    color: '#0052ff',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png'
   },
   11155111: {
     chainId: 11155111,
@@ -185,7 +195,8 @@ export const CCTP_V2_TESTNET_CONFIGS: Record<number, CctpChainConfig> = {
     decimals: 6,
     rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     explorerUrl: 'https://sepolia.etherscan.io',
-    color: '#8fa3c9'
+    color: '#8fa3c9',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png'
   }
 }
 

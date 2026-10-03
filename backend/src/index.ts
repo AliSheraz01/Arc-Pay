@@ -15,10 +15,13 @@ const dbUrl = process.env.DATABASE_URL && process.env.DATABASE_URL !== 'undefine
   ? process.env.DATABASE_URL
   : 'file:./dev.db';
 
+const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
+
 console.log(`[Database] Initializing connection to: ${dbUrl}`);
 
 const adapter = new PrismaLibSql({
   url: dbUrl,
+  authToken,
 });
 const prisma = new PrismaClient({ adapter });
 const PORT = process.env.PORT || 3001;

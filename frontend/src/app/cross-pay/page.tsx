@@ -440,6 +440,7 @@ function CctpTransferEngine() {
           abi: USDC_ABI,
           functionName: 'approve',
           args: [fromChain.tokenMessenger, reqAllowance],
+          chainId: fromChain.chainId,
         })
         
         // Wait for approval confirmation
@@ -468,6 +469,7 @@ function CctpTransferEngine() {
           0n,               // maxFee: 0 = Standard Transfer
           2000,             // minFinalityThreshold: 2000 = Standard Transfer (finalized)
         ],
+        chainId: fromChain.chainId,
       })
 
       setTransferState(prev => prev ? { 
@@ -590,6 +592,7 @@ function CctpTransferEngine() {
           transferState.cctpMessage as `0x${string}`,
           transferState.attestationBytes as `0x${string}`,
         ],
+        chainId: toChain.chainId,
       })
 
       // 3. Wait for confirmation on destination chain
@@ -777,11 +780,17 @@ function CctpTransferEngine() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px', textAlign: 'left', fontSize: '13px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>From</span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fromChain.name}</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ChainIcon chain={fromChain} size={16} />
+                    {fromChain.name}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>To</span>
-                  <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{toChain.name}</span>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ChainIcon chain={toChain} size={16} />
+                    {toChain.name}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Recipient</span>
@@ -915,6 +924,39 @@ function Panel({
   )
 }
 
+function ChainIcon({ chain, size = 20 }: { chain: CctpChainConfig; size?: number }) {
+  const [imgError, setImgError] = useState(false)
+
+  if (chain.chainId === 5042 || chain.chainId === 5042002) {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: '50%', background: 'var(--accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        boxShadow: '0 2px 6px rgba(16, 53, 246, 0.3)'
+      }}>
+        <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none">
+          <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (chain.logoUrl && !imgError) {
+    return (
+      <img
+        src={chain.logoUrl}
+        alt={chain.name}
+        onError={() => setImgError(true)}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+
+  return (
+    <span style={{ width: size, height: size, borderRadius: '50%', background: chain.color, flexShrink: 0, display: 'inline-block' }} />
+  )
+}
+
 function ChainDropdown({
   selectedChain,
   onSelect,
@@ -948,13 +990,13 @@ function ChainDropdown({
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: '12px',
-          padding: '12px 14px',
+          padding: '10px 14px',
           color: 'var(--text-primary)',
           cursor: 'pointer',
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ width: 12, height: 12, borderRadius: '50%', background: selectedChain.color }} />
+          <ChainIcon chain={selectedChain} size={22} />
           <span style={{ fontSize: '14.5px', fontWeight: 700 }}>{selectedChain.name}</span>
         </span>
         <ChevronDown size={16} color="var(--text-secondary)" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
@@ -997,7 +1039,7 @@ function ChainDropdown({
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: chain.color }} />
+                  <ChainIcon chain={chain} size={20} />
                   <span>{chain.name}</span>
                 </span>
                 {isSelected && <Check size={14} color="var(--accent)" />}
@@ -1277,8 +1319,12 @@ function CctpHistoryTab({ address }: { address?: string }) {
                   {tx.status}
                 </span>
               </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {fromCfg.name} → {toCfg.name} • {new Date(tx.createdAt).toLocaleDateString()}
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChainIcon chain={fromCfg} size={14} />{fromCfg.name}</span>
+                <span>→</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChainIcon chain={toCfg} size={14} />{toCfg.name}</span>
+                <span>•</span>
+                <span>{new Date(tx.createdAt).toLocaleDateString()}</span>
               </p>
             </div>
 

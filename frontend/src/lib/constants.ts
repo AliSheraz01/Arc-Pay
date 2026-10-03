@@ -220,6 +220,9 @@ export function addressToBytes32(address: string): `0x${string}` {
   if (!isAddress(address)) {
     throw new Error(`Invalid EVM address checksum for CCTP conversion: "${address}"`)
   }
+  if (address.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+    throw new Error('CCTP Safety: Cannot send to zero address (0x0000000000000000000000000000000000000000)')
+  }
   // Official Circle CCTP encoding: left-pad 20-byte address to 32 bytes
   // Uses viem's pad() as recommended by Circle developer docs
   return pad(address as `0x${string}`, { size: 32 })

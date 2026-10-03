@@ -296,6 +296,12 @@ function CctpTransferEngine() {
 
     // 1. Direct EVM address
     if (isAddress(clean)) {
+      if (clean.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+        setResolveError('Cannot send to zero address (0x0000...0000)')
+        setResolvedAddress(null)
+        setResolvedName(null)
+        return
+      }
       setResolvedAddress(clean as `0x${string}`)
       setResolvedName(`${clean.slice(0, 6)}...${clean.slice(-4)}`)
       return
@@ -405,8 +411,8 @@ function CctpTransferEngine() {
       return
     }
 
-    if (!targetAddr) {
-      setErrorMessage('Please provide a valid recipient username or 0x wallet address.')
+    if (!targetAddr || targetAddr.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+      setErrorMessage('Please provide a valid recipient username or non-zero 0x wallet address.')
       return
     }
 
@@ -432,8 +438,8 @@ function CctpTransferEngine() {
       targetAddr = recipient.trim() as `0x${string}`
     }
 
-    if (!targetAddr || !address) {
-      setErrorMessage('Recipient address is invalid. Cannot proceed with transfer.')
+    if (!targetAddr || targetAddr.toLowerCase() === '0x0000000000000000000000000000000000000000' || !address) {
+      setErrorMessage('Recipient address is invalid or zero address. Cannot proceed with transfer.')
       return
     }
 

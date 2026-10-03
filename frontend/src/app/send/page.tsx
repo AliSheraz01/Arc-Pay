@@ -240,6 +240,22 @@ function SendForm() {
         args: [resolvedAddress, parsedAmount, memo],
       })
       setSendTxHash(sendTx)
+
+      // 3. Record transaction in backend database for instant history
+      fetch(`${BACKEND_URL}/api/transactions/record`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          txHash: sendTx,
+          fromAddress: address,
+          toAddress: resolvedAddress,
+          amount,
+          memo,
+          chainId: ACTIVE_CHAIN.id,
+          type: 'SEND',
+        }),
+      }).catch(err => console.warn('Transaction record sync warning:', err))
+
       setStep('success')
     } catch (err) {
       console.error('Payment failed:', err)

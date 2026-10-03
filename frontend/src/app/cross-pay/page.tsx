@@ -357,15 +357,15 @@ function CctpTransferEngine() {
   // Pre-flight check before review
   const handleOpenReview = () => {
     setErrorMessage(null)
-    const targetAddr = resolvedAddress || (recipient.trim() === '' ? address : null)
+    const targetAddr = resolvedAddress || (recipient.trim() === '' ? address : (isAddress(recipient.trim()) ? recipient.trim() as `0x${string}` : null))
 
     if (!amount || parseFloat(amount) <= 0) {
       setErrorMessage('Please enter a valid USDC amount greater than 0.')
       return
     }
 
-    if (!targetAddr) {
-      setErrorMessage('Please provide a valid recipient username or wallet address.')
+    if (!targetAddr || !isAddress(targetAddr)) {
+      setErrorMessage('Please provide a valid recipient username or 0x wallet address.')
       return
     }
 
@@ -383,8 +383,11 @@ function CctpTransferEngine() {
     setShowReviewModal(false)
     setErrorMessage(null)
 
-    const targetAddr = resolvedAddress || (recipient.trim() === '' ? (address as `0x${string}`) : null)
-    if (!targetAddr || !address) return
+    const targetAddr = resolvedAddress || (recipient.trim() === '' ? (address as `0x${string}`) : (isAddress(recipient.trim()) ? recipient.trim() as `0x${string}` : null))
+    if (!targetAddr || !isAddress(targetAddr) || !address) {
+      setErrorMessage('Recipient address is invalid. Cannot proceed with transfer.')
+      return
+    }
 
     const parsedAmount = parseUnits(amount, fromChain.decimals)
     const idempotencyKey = `cctp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`

@@ -1011,15 +1011,76 @@ app.get('/api/transactions/:address', async (req, res) => {
     
     const enriched = transactions.map((tx: any) => ({
       ...tx,
-      explorerUrl: tx.explorerUrl || `https://testnet.arcscan.app/tx/${tx.txHash}`,
+      explorerUrl: tx.explorerUrl || `${EXPLORER_URL}/tx/${tx.txHash}`,
       type: tx.type || 'SEND',
       token: tx.token || 'USDC',
-      chainId: tx.chainId || 5042002,
+      chainId: tx.chainId || CHAIN_ID,
     }));
     
     res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Record a completed transaction directly from frontend
+app.post('/api/transactions/record', async (req, res) => {
+  try {
+    const { txHash, fromAddress, toAddress, amount, memo, chainId, type } = req.body;
+
+    if (!txHash || !fromAddress || !toAddress || !amount) {
+      return res.status(400).json({ error: 'txHash, fromAddress, toAddress, and amount are required.' });
+    }
+
+    const fromLower = fromAddress.toLowerCase();
+    const toLower = toAddress.toLowerCase();
+    const activeChainId = Number(chainId) || CHAIN_ID;
+    const activeExplorer = activeChainId === 5042 ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
+
+    // Ensure User records exist
+    await prisma.user.upsert({
+      where: { address: fromLower },
+      update: {},
+      create: { address: fromLower },
+    });
+    await prisma.user.upsert({
+      where: { address: toLower },
+      update: {},
+      create: { address: toLower },
+    });
+
+    const tx = await prisma.transaction.upsert({
+      where: {
+        txHash_toAddress_amount: {
+          txHash,
+          toAddress: toLower,
+          amount: amount.toString(),
+        },
+      },
+      update: {
+        status: 'COMPLETED',
+        memo: memo || undefined,
+      },
+      create: {
+        txHash,
+        fromAddress: fromLower,
+        toAddress: toLower,
+        amount: amount.toString(),
+        memo: memo || undefined,
+        token: 'USDC',
+        chainId: activeChainId,
+        type: type || 'SEND',
+        status: 'COMPLETED',
+        explorerUrl: `${activeExplorer}/tx/${txHash}`,
+        timestamp: new Date(),
+        confirmedAt: new Date(),
+      },
+    });
+
+    res.json({ success: true, transaction: tx });
+  } catch (error: any) {
+    console.error('[Record Transaction] Error:', error);
+    res.status(500).json({ error: 'Failed to record transaction' });
   }
 });
 
@@ -1096,10 +1157,10 @@ const RPC_URL = process.env.RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || (I
 const EXPLORER_URL = IS_MAINNET ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
 const START_BLOCK = process.env.START_BLOCK ? BigInt(process.env.START_BLOCK) : (IS_MAINNET ? 1n : 44800000n);
 
-const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || process.env.REGISTRY_ADDRESS || '0x1000000000000000000000000000000000000001') as `0x${string}`;
-const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_PAYMENT_ROUTER || process.env.ROUTER_ADDRESS || '0x2000000000000000000000000000000000000002') as `0x${string}`;
+const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || process.env.REGISTRY_ADDRESS || '0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D') as `0x${string}`;
+const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_PAYMENT_ROUTER || process.env.ROUTER_ADDRESS || '0x1C1F89F6Cc9b65eddE36D9F7fbd0222D53A158d6') as `0x${string}`;
 const BULK_ROUTER_ADDRESS = (process.env.BULK_ROUTER_ADDRESS || '0xB1a346132F5eC1Ad7CC8A84DE33A2763d13110B4') as `0x${string}`;
-const BOUNTY_ESCROW_ADDRESS = (process.env.NEXT_PUBLIC_BOUNTY_ESCROW || process.env.BOUNTY_ESCROW_ADDRESS || '0x3000000000000000000000000000000000000003') as `0x${string}`;
+const BOUNTY_ESCROW_ADDRESS = (process.env.NEXT_PUBLIC_BOUNTY_ESCROW || process.env.BOUNTY_ESCROW_ADDRESS || '0x7BF7557F1BBAfB44865B5Ce8661806352774737E') as `0x${string}`;
 
 const viemClient = createPublicClient({
   transport: http(RPC_URL),

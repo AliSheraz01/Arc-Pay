@@ -213,6 +213,9 @@ export function getCctpConfig(chainId: number): CctpChainConfig {
 }
 
 export function addressToBytes32(address: string): `0x${string}` {
+  if (!address || typeof address !== 'string' || !address.startsWith('0x') || address.length !== 42) {
+    throw new Error(`Invalid EVM address for CCTP conversion: "${address}"`)
+  }
   const clean = address.replace('0x', '').toLowerCase().padStart(64, '0')
   return `0x${clean}` as `0x${string}`
 }

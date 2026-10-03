@@ -151,6 +151,7 @@ function CctpTransferEngine() {
   const [toChain, setToChain] = useState<CctpChainConfig>(defaultTo)
 
   const [amount, setAmount] = useState('')
+  const [recipientMode, setRecipientMode] = useState<'easyzpay' | 'x' | 'address'>('easyzpay')
   const [recipient, setRecipient] = useState('')
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null)
   const [resolvedName, setResolvedName] = useState<string | null>(null)
@@ -280,7 +281,7 @@ function CctpTransferEngine() {
   }, [transferState, address])
 
   // Resolve Recipient (@username, x/@username, or 0x address)
-  const resolveRecipient = useCallback(async (val: string) => {
+  const resolveRecipient = useCallback(async (val: string, mode: 'easyzpay' | 'x' | 'address' = recipientMode) => {
     setResolveError(null)
     setResolvedAddress(null)
     setResolvedName(null)
@@ -295,57 +296,83 @@ function CctpTransferEngine() {
       return
     }
 
+    // Auto-detect mode if identifier has x: or @ prefix
+    let identifier = clean
+    const isXMode = mode === 'x' || identifier.startsWith('x:') || identifier.startsWith('X:') || identifier.startsWith('x/')
+    const xHandle = identifier.replace(/^(x:|X:|x\/|@)/, '').trim().toLowerCase()
+
     setResolving(true)
 
-    // 2. X username (e.g. x/@username or @x:username)
-    if (clean.startsWith('x/') || clean.startsWith('x:@')) {
-      const xHandle = clean.replace(/^x\//, '').replace(/^x:@/, '').replace('@', '').toLowerCase()
+    // 2. X username
+    if (isXMode && xHandle) {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/resolve/x/${xHandle}`)
-        const data = await res.json()
-        if (res.ok && data.connected && data.address) {
-          setResolvedAddress(data.address as `0x${string}`)
-          setResolvedName(`X: @${data.username} (${data.displayName})`)
-          return
+        const xRes = await fetch(`${BACKEND_URL}/api/resolve/x/${encodeURIComponent(xHandle)}`)
+        if (xRes.ok) {
+          const xData = await xRes.json()
+          if (xData.connected && xData.address && isAddress(xData.address)) {
+            setResolvedAddress(xData.address as `0x${string}`)
+            setResolvedName(`X: @${xData.username || xHandle}`)
+            setResolving(false)
+            return
+          }
         }
-        setResolveError(`X user "@${xHandle}" hasn't connected EasyZPay yet.`)
-      } catch {
-        setResolveError(`Could not resolve X user "@${xHandle}".`)
-      } finally {
-        setResolving(false)
+      } catch (err) {
+        console.warn('X resolution check failed:', err)
       }
-      return
     }
 
-    // 3. EasyZPay username
+    // 3. EasyZPay username via backend API
     const username = clean.replace('@', '').toLowerCase()
     try {
-      const res = await fetch(`${BACKEND_URL}/api/resolve/${username}`)
+      const res = await fetch(`${BACKEND_URL}/api/resolve/${encodeURIComponent(username)}`)
       if (res.ok) {
         const data = await res.json()
-        if (data.address) {
-          setResolvedAddress(data.address as `0x${string}`)
-          setResolvedName(`@${username}`)
+        const targetAddr = data.walletAddress || data.address
+        if (data.found && targetAddr && isAddress(targetAddr)) {
+          setResolvedAddress(targetAddr as `0x${string}`)
+          setResolvedName(data.displayName || `@${username}`)
+          setResolving(false)
           return
         }
       }
+
       // Check X fallback
-      const xRes = await fetch(`${BACKEND_URL}/api/resolve/x/${username}`)
+      const xRes = await fetch(`${BACKEND_URL}/api/resolve/x/${encodeURIComponent(username)}`)
       if (xRes.ok) {
         const xData = await xRes.json()
-        if (xData.connected && xData.address) {
+        if (xData.connected && xData.address && isAddress(xData.address)) {
           setResolvedAddress(xData.address as `0x${string}`)
           setResolvedName(`X: @${xData.username}`)
+          setResolving(false)
           return
         }
       }
-      setResolveError(`Could not find EasyZPay user "@${username}"`)
-    } catch {
-      setResolveError(`Could not resolve recipient "${val}"`)
-    } finally {
-      setResolving(false)
-    }
-  }, [])
+    } catch {}
+
+    // 4. Direct on-chain registry fallback read via Arc Registry contract
+    try {
+      const client = createPublicClient({
+        chain: ACTIVE_CHAIN as any,
+        transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_PRODUCTION ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network')),
+      })
+      const onChainAddr = await client.readContract({
+        address: REGISTRY_ADDRESS,
+        abi: REGISTRY_ABI,
+        functionName: 'resolveUsername',
+        args: [username],
+      }) as `0x${string}`
+
+      if (onChainAddr && onChainAddr !== '0x0000000000000000000000000000000000000000' && isAddress(onChainAddr)) {
+        setResolvedAddress(onChainAddr)
+        setResolvedName(`@${username}`)
+        setResolving(false)
+        return
+      }
+    } catch {}
+
+    setResolveError(`Could not find user "${clean}"`)
+    setResolving(false)
+  }, [recipientMode])
 
   // Swap chains
   const handleSwapChains = () => {
@@ -716,10 +743,55 @@ function CctpTransferEngine() {
         />
 
         <div style={{ marginTop: '20px' }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>Recipient (@username or Address)</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              Recipient ({recipientMode === 'easyzpay' ? '@username' : recipientMode === 'x' ? '𝕏 handle' : '0x Address'})
+            </label>
+          </div>
+
+          {/* Mode Toggle */}
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--surface-raised)', padding: '4px', borderRadius: '12px', marginBottom: '12px' }}>
+            <button
+              type="button"
+              onClick={() => { setRecipientMode('easyzpay'); resolveRecipient(recipient, 'easyzpay'); }}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+                background: recipientMode === 'easyzpay' ? 'var(--surface)' : 'transparent',
+                color: recipientMode === 'easyzpay' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                border: recipientMode === 'easyzpay' ? '1px solid var(--border)' : 'none', cursor: 'pointer',
+              }}
+            >
+              @username
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRecipientMode('x'); resolveRecipient(recipient, 'x'); }}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+                background: recipientMode === 'x' ? 'var(--surface)' : 'transparent',
+                color: recipientMode === 'x' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                border: recipientMode === 'x' ? '1px solid var(--border)' : 'none', cursor: 'pointer',
+              }}
+            >
+              𝕏 Handle
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRecipientMode('address'); resolveRecipient(recipient, 'address'); }}
+              style={{
+                flex: 1, padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+                background: recipientMode === 'address' ? 'var(--surface)' : 'transparent',
+                color: recipientMode === 'address' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                border: recipientMode === 'address' ? '1px solid var(--border)' : 'none', cursor: 'pointer',
+              }}
+            >
+              0x Address
+            </button>
+          </div>
+
           <input 
             type="text" 
-            placeholder="@alisheraz0ev or 0x... (Default: Your address)" 
+            placeholder={recipientMode === 'easyzpay' ? '@alisheraz0ev (Default: Your address)' : recipientMode === 'x' ? 'x/@alisheraz0ev' : '0x...'} 
             value={recipient}
             onChange={e => {
               setRecipient(e.target.value)
@@ -727,11 +799,11 @@ function CctpTransferEngine() {
             }}
             style={{ width: '100%', padding: '16px', background: 'var(--surface-raised)', borderRadius: '16px', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '15px', outline: 'none' }}
           />
-          {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving username...</div>}
+          {resolving && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdSearch /> Resolving recipient...</div>}
           {resolveError && <div style={{ fontSize: '12px', color: '#ff4466', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><MdErrorOutline /> {resolveError}</div>}
-          {resolvedAddress && !resolving && !resolveError && recipient !== resolvedAddress && (
+          {resolvedAddress && !resolving && !resolveError && (
             <div style={{ fontSize: '12px', color: 'var(--green)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MdCheckCircle /> Resolved: {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+              <MdCheckCircle /> {resolvedName ? `Resolved ${resolvedName}:` : 'Resolved:'} {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
             </div>
           )}
         </div>

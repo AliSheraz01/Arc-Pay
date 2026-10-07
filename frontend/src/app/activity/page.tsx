@@ -44,15 +44,21 @@ export default function ActivityPage() {
   const itemsPerPage = 8
 
   const { data: transactions, isLoading } = useQuery({
-    queryKey: ['transactions', address],
     queryFn: async () => {
       if (!address) return []
-      const res = await fetch(`${BACKEND_URL}/api/transactions/${address}`)
-      if (!res.ok) return []
-      return res.json() as Promise<Transaction[]>
+      try {
+        if (BACKEND_URL) {
+          const res = await fetch(`${BACKEND_URL}/api/transactions/${address}`)
+          if (res.ok) return (await res.json()) as Transaction[]
+        }
+      } catch {}
+      // Fallback to internal Next.js App Router API route (queries Turso + Arc Explorer live)
+      const localRes = await fetch(`/api/transactions/${address}`)
+      if (localRes.ok) return (await localRes.json()) as Transaction[]
+      return []
     },
     enabled: !!address,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   })
 
   if (!isConnected) {

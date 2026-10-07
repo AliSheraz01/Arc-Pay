@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
@@ -30,19 +33,24 @@ export async function GET(
 
     // 2. Fetch live on-chain token transactions directly from Arc Mainnet Blockscout API
     let onChainTxs: any[] = []
+    const fetchHeaders = {
+      'Accept': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
     try {
-      const explorerUrl = `https://explorer.arc.io/api?module=account&action=tokentx&address=${addrLower}`
-      const res = await fetch(explorerUrl, { headers: { Accept: 'application/json' }, next: { revalidate: 15 } })
+      const tokenTxUrl = `https://explorer.arc.io/api?module=account&action=tokentx&address=${addrLower}`
+      const res = await fetch(tokenTxUrl, { headers: fetchHeaders, cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         if (data.status === '1' && Array.isArray(data.result)) {
-          onChainTxs = data.result.map((tx: any) => {
+          for (const tx of data.result) {
             const rawAmount = tx.value || '0'
             const decimals = Number(tx.tokenDecimal) || 6
             const formattedAmount = (Number(rawAmount) / Math.pow(10, decimals)).toString()
 
-            return {
-              id: tx.hash + '_' + tx.from,
+            onChainTxs.push({
+              id: tx.hash + '_' + tx.from + '_' + tx.nonce,
               txHash: tx.hash,
               fromAddress: tx.from.toLowerCase(),
               toAddress: tx.to.toLowerCase(),
@@ -54,12 +62,12 @@ export async function GET(
               explorerUrl: `https://explorer.arc.io/tx/${tx.hash}`,
               timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
               confirmedAt: new Date(Number(tx.timeStamp) * 1000).toISOString(),
-            }
-          })
+            })
+          }
         }
       }
     } catch (explorerErr) {
-      console.warn('[Transactions API] Arc Explorer API fetch warning:', explorerErr)
+      console.warn('[Transactions API] Arc Explorer API tokentx warning:', explorerErr)
     }
 
     // 3. Merge DB transactions and On-chain Explorer transactions deduplicated by txHash

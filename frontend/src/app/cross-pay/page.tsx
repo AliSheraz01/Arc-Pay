@@ -1379,9 +1379,19 @@ function CctpHistoryTab({ address }: { address?: string }) {
     const fetchHistory = async () => {
       setLoading(true)
       try {
-        const res = await fetch(`${BACKEND_URL}/api/crosspay/user/${address}`)
-        if (res.ok) {
-          const data = await res.json()
+        if (BACKEND_URL) {
+          const res = await fetch(`${BACKEND_URL}/api/crosspay/user/${address}`)
+          if (res.ok) {
+            const data = await res.json()
+            setHistory(data)
+            setLoading(false)
+            return
+          }
+        }
+        // Fallback to internal Next.js App Router API route connected to Turso DB
+        const localRes = await fetch(`/api/crosspay/user/${address}`)
+        if (localRes.ok) {
+          const data = await localRes.json()
           setHistory(data)
         }
       } catch (err) {

@@ -1155,7 +1155,7 @@ const IS_MAINNET = (process.env.NETWORK_MODE || process.env.NEXT_PUBLIC_NETWORK 
 const CHAIN_ID = IS_MAINNET ? 5042 : 5042002;
 const RPC_URL = process.env.RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_MAINNET ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network');
 const EXPLORER_URL = IS_MAINNET ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
-const START_BLOCK = process.env.START_BLOCK ? BigInt(process.env.START_BLOCK) : (IS_MAINNET ? 1n : 44800000n);
+const START_BLOCK = process.env.START_BLOCK ? BigInt(process.env.START_BLOCK) : (IS_MAINNET ? 24000000n : 44800000n);
 
 const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || process.env.REGISTRY_ADDRESS || '0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D') as `0x${string}`;
 const ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_PAYMENT_ROUTER || process.env.ROUTER_ADDRESS || '0x1C1F89F6Cc9b65eddE36D9F7fbd0222D53A158d6') as `0x${string}`;

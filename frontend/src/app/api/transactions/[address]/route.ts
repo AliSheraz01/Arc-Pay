@@ -1,43 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-export const transactionsStore: Map<string, any[]> =
-  (globalThis as any).__transactionsStore || ((globalThis as any).__transactionsStore = new Map())
+import { db } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
-  const { address } = await params
-  if (!address) return NextResponse.json([])
-
-  const addrLower = address.toLowerCase()
-  const txs = transactionsStore.get(addrLower) || []
-
-  return NextResponse.json(txs)
-}
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ address: string }> }
-) {
   try {
     const { address } = await params
-    const tx = await request.json()
+    if (!address) return NextResponse.json([])
+
     const addrLower = address.toLowerCase()
 
-    const list = transactionsStore.get(addrLower) || []
-    if (!list.some(existing => existing.txHash === tx.txHash)) {
-      list.unshift({
-        ...tx,
-        explorerUrl: tx.explorerUrl || `https://testnet.arcscan.app/tx/${tx.txHash}`,
-        status: tx.status || 'CONFIRMED',
-        timestamp: tx.timestamp || new Date().toISOString(),
-      })
-      transactionsStore.set(addrLower, list)
-    }
+    const transactions = await db.transaction.findMany({
+      where: {
+        OR: [
+          { fromAddress: addrLower },
+          { toAddress: addrLower }
+        ]
+      },
+      orderBy: { timestamp: 'desc' },
+      take: 50
+    })
 
-    return NextResponse.json({ success: true })
+    const enriched = transactions.map((tx: any) => ({
+      ...tx,
+      explorerUrl: tx.explorerUrl || `https://explorer.arc.io/tx/${tx.txHash}`,
+      type: tx.type || 'SEND',
+      token: tx.token || 'USDC',
+      chainId: tx.chainId || 5042,
+    }))
+
+    return NextResponse.json(enriched)
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error('Failed to fetch transactions from Turso:', err)
+    return NextResponse.json([], { status: 500 })
   }
 }

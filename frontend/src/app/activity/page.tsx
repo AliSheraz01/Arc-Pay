@@ -44,6 +44,7 @@ export default function ActivityPage() {
   const itemsPerPage = 8
 
   const { data: transactions, isLoading } = useQuery({
+    queryKey: ['transactions', address],
     queryFn: async () => {
       if (!address) return []
       try {

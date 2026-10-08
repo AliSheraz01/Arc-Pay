@@ -38,7 +38,18 @@ export const BULK_ROUTER_ADDRESS = (process.env.NEXT_PUBLIC_BULK_ROUTER_ADDRESS 
 export const SCHEDULER_ADDRESS = (process.env.NEXT_PUBLIC_SCHEDULER_ADDRESS ?? '0xb10F4e8646dEf105B1083540F13AB1ef73968fa1') as `0x${string}`
 
 export const EXPLORER_URL = ACTIVE_EXPLORER_URL
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
+// Backend API URL — must be https:// (or http://localhost for dev). Never libsql://.
+const _rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
+export const BACKEND_URL = (() => {
+  const url = _rawBackendUrl.replace(/\/+$/, '') // trim trailing slashes
+  if (url && !/^https?:\/\//i.test(url)) {
+    throw new Error(
+      `NEXT_PUBLIC_BACKEND_URL must be an http(s) URL, not "${url}". ` +
+      `If you see "libsql://", that is the database URL and must only be used server-side.`
+    )
+  }
+  return url
+})()
 export const FAUCET_URL = 'https://faucet.circle.com'
 
 // Official Circle CCTP V2 Chain Configuration Interface

@@ -241,20 +241,55 @@ function SendForm() {
       })
       setSendTxHash(sendTx)
 
-      // 3. Record transaction in backend database for instant history
-      fetch(`${BACKEND_URL}/api/transactions/record`, {
+      // 3. Record transaction in local cache and backend database for instant history
+      if (address) {
+        try {
+          const localTx = {
+            id: sendTx + '_' + address,
+            txHash: sendTx,
+            fromAddress: address.toLowerCase(),
+            toAddress: resolvedAddress.toLowerCase(),
+            amount,
+            memo,
+            token: 'USDC',
+            chainId: ACTIVE_CHAIN.id,
+            type: 'SEND',
+            status: 'COMPLETED',
+            explorerUrl: `${EXPLORER_URL}/tx/${sendTx}`,
+            timestamp: new Date().toISOString(),
+            confirmedAt: new Date().toISOString(),
+          }
+          const existing = JSON.parse(localStorage.getItem(`easyzpay_local_txs_${address.toLowerCase()}`) || '[]')
+          const updated = [localTx, ...existing.filter((t: any) => t.txHash !== sendTx)]
+          localStorage.setItem(`easyzpay_local_txs_${address.toLowerCase()}`, JSON.stringify(updated.slice(0, 50)))
+        } catch {}
+      }
+
+      const recordPayload = {
+        txHash: sendTx,
+        fromAddress: address,
+        toAddress: resolvedAddress,
+        amount,
+        memo,
+        chainId: ACTIVE_CHAIN.id,
+        type: 'SEND',
+      }
+
+      // Try internal Next.js App Router API route first
+      fetch('/api/transactions/record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          txHash: sendTx,
-          fromAddress: address,
-          toAddress: resolvedAddress,
-          amount,
-          memo,
-          chainId: ACTIVE_CHAIN.id,
-          type: 'SEND',
-        }),
-      }).catch(err => console.warn('Transaction record sync warning:', err))
+        body: JSON.stringify(recordPayload),
+      }).catch(err => console.warn('Local transaction record sync warning:', err))
+
+      // Also sync to external backend if configured
+      if (BACKEND_URL) {
+        fetch(`${BACKEND_URL}/api/transactions/record`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recordPayload),
+        }).catch(err => console.warn('Backend transaction record sync warning:', err))
+      }
 
       setStep('success')
     } catch (err) {

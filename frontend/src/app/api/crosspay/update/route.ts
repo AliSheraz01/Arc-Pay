@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -27,6 +29,46 @@ export async function POST(request: NextRequest) {
         errorReason: errorReason !== undefined ? errorReason : existing.errorReason,
       },
     })
+
+    // Automatically sync CrossPay transaction state into the unified Transaction table
+    if (updated.sourceTxHash) {
+      try {
+        const isCompleted = updated.status === 'complete' || updated.status === 'COMPLETED'
+        await db.transaction.upsert({
+          where: {
+            txHash_toAddress_amount: {
+              txHash: updated.sourceTxHash,
+              toAddress: updated.recipientAddress,
+              amount: updated.amount,
+            },
+          },
+          update: {
+            status: isCompleted ? 'COMPLETED' : 'PENDING',
+            destinationTxHash: updated.destinationTxHash || undefined,
+            confirmedAt: isCompleted ? new Date() : undefined,
+          },
+          create: {
+            txHash: updated.sourceTxHash,
+            fromAddress: updated.senderAddress,
+            toAddress: updated.recipientAddress,
+            amount: updated.amount,
+            token: updated.token || 'USDC',
+            chainId: updated.sourceChain,
+            sourceChain: updated.sourceChain,
+            destinationChain: updated.destinationChain,
+            destinationTxHash: updated.destinationTxHash || undefined,
+            type: 'CROSS_PAY',
+            status: isCompleted ? 'COMPLETED' : 'PENDING',
+            memo: `Cross-chain USDC: ${updated.sourceChain} → ${updated.destinationChain}`,
+            explorerUrl: `https://explorer.arc.io/tx/${updated.sourceTxHash}`,
+            timestamp: updated.createdAt,
+            confirmedAt: isCompleted ? new Date() : undefined,
+          },
+        })
+      } catch (txSyncErr) {
+        console.warn('Could not sync CrossPay into Transaction table:', txSyncErr)
+      }
+    }
 
     return NextResponse.json({ success: true, crossPay: updated })
   } catch (err: any) {

@@ -396,15 +396,15 @@ function CctpTransferEngine() {
   const handleOpenReview = () => {
     setErrorMessage(null)
     
-    // Determine target address - NEVER silently default to sender
+    // Determine target address - defaults to connected address if recipient is left empty (standard bridge flow)
     let targetAddr: `0x${string}` | null = null
     if (resolvedAddress && isAddress(resolvedAddress)) {
       targetAddr = resolvedAddress
     } else if (recipient.trim() && isAddress(recipient.trim())) {
       targetAddr = recipient.trim() as `0x${string}`
+    } else if (!recipient.trim() && address && isAddress(address)) {
+      targetAddr = address as `0x${string}`
     }
-    // If recipient field is empty, DO NOT default to sender's own address
-    // The user must explicitly enter a recipient for cross-chain transfers
 
     if (!amount || parseFloat(amount) <= 0) {
       setErrorMessage('Please enter a valid USDC amount greater than 0.')
@@ -430,12 +430,14 @@ function CctpTransferEngine() {
     setShowReviewModal(false)
     setErrorMessage(null)
 
-    // Determine target address - NEVER silently default to sender
+    // Determine target address - defaults to sender if omitted
     let targetAddr: `0x${string}` | null = null
     if (resolvedAddress && isAddress(resolvedAddress)) {
       targetAddr = resolvedAddress
     } else if (recipient.trim() && isAddress(recipient.trim())) {
       targetAddr = recipient.trim() as `0x${string}`
+    } else if (!recipient.trim() && address && isAddress(address)) {
+      targetAddr = address as `0x${string}`
     }
 
     if (!targetAddr || targetAddr.toLowerCase() === '0x0000000000000000000000000000000000000000' || !address) {
@@ -449,25 +451,47 @@ function CctpTransferEngine() {
     // Step 1: Create backend record
     let crossPayId: string | undefined
     try {
-      const createRes = await fetch(`${BACKEND_URL}/api/crosspay/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceChain: fromChain.chainId,
-          destinationChain: toChain.chainId,
-          amount,
-          senderAddress: address,
-          recipientAddress: targetAddr,
-          recipientUsername: resolvedName || recipient,
-          idempotencyKey,
-        }),
-      })
-      const createData = await createRes.json()
-      if (createData.crossPay) {
-        crossPayId = createData.crossPay.id
+      let createRes: Response | null = null
+      if (BACKEND_URL) {
+        try {
+          createRes = await fetch(`${BACKEND_URL}/api/crosspay/create`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sourceChain: fromChain.chainId,
+              destinationChain: toChain.chainId,
+              amount,
+              senderAddress: address,
+              recipientAddress: targetAddr,
+              recipientUsername: resolvedName || recipient,
+              idempotencyKey,
+            }),
+          })
+        } catch {}
+      }
+      if (!createRes || !createRes.ok) {
+        createRes = await fetch('/api/crosspay/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceChain: fromChain.chainId,
+            destinationChain: toChain.chainId,
+            amount,
+            senderAddress: address,
+            recipientAddress: targetAddr,
+            recipientUsername: resolvedName || recipient,
+            idempotencyKey,
+          }),
+        })
+      }
+      if (createRes.ok) {
+        const createData = await createRes.json()
+        if (createData.crossPay) {
+          crossPayId = createData.crossPay.id
+        }
       }
     } catch (err) {
-      console.warn('Backend creation failed, proceeding with client-side state machine:', err)
+      console.warn('Backend creation fallback:', err)
     }
 
     const currentTransfer: InFlightCrossPay = {
@@ -511,12 +535,6 @@ function CctpTransferEngine() {
       const mintRecipientBytes32 = addressToBytes32(targetAddr)
       const destinationDomain = toChain.domain
 
-      // CRITICAL SAFETY CHECK: Ensure we're not sending to the sender's own address
-      const senderBytes32 = addressToBytes32(address)
-      if (mintRecipientBytes32.toLowerCase() === senderBytes32.toLowerCase()) {
-        throw new Error('CCTP Safety: mintRecipient matches sender address. Cross-chain transfer must have a different recipient.')
-      }
-
       console.log('[CCTP] depositForBurn args:', {
         amount: parsedAmount.toString(),
         destinationDomain,
@@ -550,6 +568,29 @@ function CctpTransferEngine() {
         status: 'source_pending' 
       } : null)
 
+      // Instantly track in local history
+      try {
+        const localTx = {
+          id: burnTxHash + '_' + address,
+          txHash: burnTxHash,
+          fromAddress: address.toLowerCase(),
+          toAddress: targetAddr.toLowerCase(),
+          amount,
+          token: 'USDC',
+          chainId: fromChain.chainId,
+          sourceChain: fromChain.chainId,
+          destinationChain: toChain.chainId,
+          type: 'CROSS_PAY',
+          status: 'PENDING',
+          memo: `Cross-chain USDC: ${fromChain.name} → ${toChain.name}`,
+          explorerUrl: `${fromChain.explorerUrl}/tx/${burnTxHash}`,
+          timestamp: new Date().toISOString(),
+        }
+        const existing = JSON.parse(localStorage.getItem(`easyzpay_local_txs_${address.toLowerCase()}`) || '[]')
+        const updated = [localTx, ...existing.filter((t: any) => t.txHash !== burnTxHash)]
+        localStorage.setItem(`easyzpay_local_txs_${address.toLowerCase()}`, JSON.stringify(updated.slice(0, 50)))
+      } catch {}
+
       // 4. Wait for Source Receipt and extract CCTP Message Bytes
       const sourceClient = createPublicClient({ transport: http(fromChain.rpcUrl) })
       const sourceReceipt = await sourceClient.waitForTransactionReceipt({ hash: burnTxHash })
@@ -577,7 +618,6 @@ function CctpTransferEngine() {
       if (rawMessage) {
         msgHash = keccak256(rawMessage)
       } else {
-        // Fallback to tx hash
         msgHash = burnTxHash
       }
 
@@ -588,7 +628,7 @@ function CctpTransferEngine() {
         status: 'attestation_pending' 
       } : null)
 
-      // 5. Poll Circle Iris Attestation API via backend (CCTP V2)
+      // 5. Poll Circle Iris Attestation API via backend / Next.js route (CCTP V2)
       pollCircleAttestation(fromChain.domain, burnTxHash, rawMessage, currentTransfer)
     } catch (err: any) {
       console.error('CCTP Execution error:', err)
@@ -611,21 +651,35 @@ function CctpTransferEngine() {
     const checkInterval = setInterval(async () => {
       attempts++
       try {
-        const res = await fetch(`${BACKEND_URL}/api/cctp/attestation`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sourceDomainId, transactionHash: txHash }),
-        })
-        const data = await res.json()
+        let res: Response | null = null
+        if (BACKEND_URL) {
+          try {
+            res = await fetch(`${BACKEND_URL}/api/cctp/attestation`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sourceDomainId, transactionHash: txHash }),
+            })
+          } catch {}
+        }
+        if (!res || !res.ok) {
+          res = await fetch(`/api/cctp/attestation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourceDomainId, transactionHash: txHash }),
+          })
+        }
 
-        if (data.status === 'complete' && data.attestation) {
-          clearInterval(checkInterval)
-          setTransferState(prev => prev ? {
-            ...prev,
-            cctpMessage: (data.message as `0x${string}`) || rawMessageFallback || prev.cctpMessage,
-            attestationBytes: data.attestation,
-            status: 'attestation_received'
-          } : null)
+        if (res && res.ok) {
+          const data = await res.json()
+          if (data.status === 'complete' && data.attestation) {
+            clearInterval(checkInterval)
+            setTransferState(prev => prev ? {
+              ...prev,
+              cctpMessage: (data.message as `0x${string}`) || rawMessageFallback || prev.cctpMessage,
+              attestationBytes: data.attestation,
+              status: 'attestation_received'
+            } : null)
+          }
         }
 
         if (attempts >= maxAttempts) {
@@ -676,6 +730,20 @@ function CctpTransferEngine() {
         destinationTxHash: destTxHash,
         status: 'complete',
       } : null)
+
+      // Update local storage record to completed
+      if (address && transferState.sourceTxHash) {
+        try {
+          const stored = JSON.parse(localStorage.getItem(`easyzpay_local_txs_${address.toLowerCase()}`) || '[]')
+          const updated = stored.map((t: any) => {
+            if (t.txHash === transferState.sourceTxHash) {
+              return { ...t, destinationTxHash: destTxHash, status: 'COMPLETED', confirmedAt: new Date().toISOString() }
+            }
+            return t
+          })
+          localStorage.setItem(`easyzpay_local_txs_${address.toLowerCase()}`, JSON.stringify(updated))
+        } catch {}
+      }
 
       // Refresh balances
       if (address) loadBalances(address)
@@ -1379,21 +1447,49 @@ function CctpHistoryTab({ address }: { address?: string }) {
     const fetchHistory = async () => {
       setLoading(true)
       try {
+        let serverHistory: any[] = []
         if (BACKEND_URL) {
-          const res = await fetch(`${BACKEND_URL}/api/crosspay/user/${address}`)
-          if (res.ok) {
-            const data = await res.json()
-            setHistory(data)
-            setLoading(false)
-            return
+          try {
+            const res = await fetch(`${BACKEND_URL}/api/crosspay/user/${address}`)
+            if (res.ok) {
+              serverHistory = await res.json()
+            }
+          } catch {}
+        }
+        
+        if (serverHistory.length === 0) {
+          // Fallback to internal Next.js App Router API route connected to Turso DB
+          const localRes = await fetch(`/api/crosspay/user/${address}`)
+          if (localRes.ok) {
+            serverHistory = await localRes.json()
           }
         }
-        // Fallback to internal Next.js App Router API route connected to Turso DB
-        const localRes = await fetch(`/api/crosspay/user/${address}`)
-        if (localRes.ok) {
-          const data = await localRes.json()
-          setHistory(data)
-        }
+
+        // Merge with locally stored cross-pay transfers
+        let mergedList = [...(serverHistory || [])]
+        try {
+          const raw = localStorage.getItem(`easyzpay_local_txs_${address.toLowerCase()}`)
+          if (raw) {
+            const localCrossPays = JSON.parse(raw).filter((t: any) => t.type === 'CROSS_PAY')
+            const existingHashes = new Set(mergedList.map((m: any) => (m.sourceTxHash || '').toLowerCase()))
+            for (const lcp of localCrossPays) {
+              if (lcp.txHash && !existingHashes.has(lcp.txHash.toLowerCase())) {
+                mergedList.unshift({
+                  id: lcp.id || lcp.txHash,
+                  amount: lcp.amount,
+                  sourceChain: lcp.sourceChain || lcp.chainId,
+                  destinationChain: lcp.destinationChain,
+                  sourceTxHash: lcp.txHash,
+                  destinationTxHash: lcp.destinationTxHash,
+                  status: lcp.status,
+                  createdAt: lcp.timestamp,
+                })
+              }
+            }
+          }
+        } catch {}
+
+        setHistory(mergedList)
       } catch (err) {
         console.error('Failed to load Cross Pay history:', err)
       } finally {

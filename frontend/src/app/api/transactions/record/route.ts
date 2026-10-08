@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { isAddress } from 'viem'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -7,7 +10,10 @@ export async function POST(request: NextRequest) {
     const { txHash, fromAddress, toAddress, amount, memo, chainId, type } = body
 
     if (!txHash || !fromAddress || !toAddress || !amount) {
-      return NextResponse.json({ error: 'txHash, fromAddress, toAddress, and amount are required.' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'txHash, fromAddress, toAddress, and amount are required.' },
+        { status: 400 }
+      )
     }
 
     const fromLower = fromAddress.toLowerCase()
@@ -15,17 +21,25 @@ export async function POST(request: NextRequest) {
     const activeChainId = Number(chainId) || 5042
     const activeExplorer = activeChainId === 5042 ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app'
 
-    // Ensure User records exist
-    await db.user.upsert({
-      where: { address: fromLower },
-      update: {},
-      create: { address: fromLower },
-    })
-    await db.user.upsert({
-      where: { address: toLower },
-      update: {},
-      create: { address: toLower },
-    })
+    // Try to ensure User records exist without breaking if constraints fail
+    try {
+      if (isAddress(fromLower)) {
+        await db.user.upsert({
+          where: { address: fromLower },
+          update: {},
+          create: { address: fromLower },
+        })
+      }
+      if (isAddress(toLower)) {
+        await db.user.upsert({
+          where: { address: toLower },
+          update: {},
+          create: { address: toLower },
+        })
+      }
+    } catch (userErr) {
+      console.warn('[Transactions Record] Non-fatal user upsert warning:', userErr)
+    }
 
     const tx = await db.transaction.upsert({
       where: {
@@ -38,6 +52,7 @@ export async function POST(request: NextRequest) {
       update: {
         status: 'COMPLETED',
         memo: memo || undefined,
+        confirmedAt: new Date(),
       },
       create: {
         txHash,

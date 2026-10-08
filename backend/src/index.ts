@@ -26,7 +26,15 @@ const adapter = new PrismaLibSql({
 const prisma = new PrismaClient({ adapter });
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://easyzpay.xyz',
+    'https://www.easyzpay.xyz',
+    /^http:\/\/localhost(:\d+)?$/,
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Environment & Network configuration — single source of truth
@@ -992,11 +1000,16 @@ app.get('/api/resolve/:username', async (req, res) => {
   }
 });
 
-// Get transactions for an address
+// Get transactions for an address (validated, paginated)
 app.get('/api/transactions/:address', async (req, res) => {
   try {
     const { address } = req.params;
+    if (!isAddress(address)) {
+      return res.status(400).json({ error: 'Invalid Ethereum address' });
+    }
     const addrLower = address.toLowerCase();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const cursor = req.query.cursor as string | undefined;
     
     const transactions = await prisma.transaction.findMany({
       where: {
@@ -1006,10 +1019,12 @@ app.get('/api/transactions/:address', async (req, res) => {
         ]
       },
       orderBy: { timestamp: 'desc' },
-      take: 50
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
     
-    const enriched = transactions.map((tx: any) => ({
+    const hasMore = transactions.length > limit;
+    const data = (hasMore ? transactions.slice(0, limit) : transactions).map((tx: any) => ({
       ...tx,
       explorerUrl: tx.explorerUrl || `${EXPLORER_URL}/tx/${tx.txHash}`,
       type: tx.type || 'SEND',
@@ -1017,8 +1032,12 @@ app.get('/api/transactions/:address', async (req, res) => {
       chainId: tx.chainId || CHAIN_ID,
     }));
     
-    res.json(enriched);
+    res.json({
+      data,
+      nextCursor: hasMore ? transactions[limit - 1]?.id : undefined,
+    });
   } catch (error) {
+    console.error('[Transactions] Error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

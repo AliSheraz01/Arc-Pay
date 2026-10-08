@@ -15,7 +15,8 @@ import {
   MdSearch, 
   MdOpenInNew, 
   MdChevronLeft, 
-  MdChevronRight 
+  MdChevronRight,
+  MdSwapHoriz 
 } from 'react-icons/md'
 
 interface Transaction {
@@ -43,23 +44,62 @@ export default function ActivityPage() {
   const [page, setPage] = useState(1)
   const itemsPerPage = 8
 
-  const { data: transactions, isLoading } = useQuery({
+  const { data: transactions, isLoading, isError, refetch } = useQuery({
     queryKey: ['transactions', address],
     queryFn: async () => {
       if (!address) return []
+      const lower = address.toLowerCase()
+      let serverTxs: Transaction[] = []
+
+      // 1. Fetch from internal Next.js API route (Turso + CrossPay + onchain RPC)
       try {
-        if (BACKEND_URL) {
-          const res = await fetch(`${BACKEND_URL}/api/transactions/${address}`)
-          if (res.ok) return (await res.json()) as Transaction[]
+        const localRes = await fetch(`/api/transactions/${lower}`)
+        if (localRes.ok) {
+          const json = await localRes.json()
+          serverTxs = (Array.isArray(json) ? json : json.data ?? []) as Transaction[]
+        }
+      } catch (e) {
+        console.warn('Local transactions API fetch warning:', e)
+      }
+
+      // 2. Fallback to external backend if configured and local returned empty
+      if (serverTxs.length === 0 && BACKEND_URL) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/transactions/${lower}`)
+          if (res.ok) {
+            const json = await res.json()
+            serverTxs = (Array.isArray(json) ? json : json.data ?? []) as Transaction[]
+          }
+        } catch {}
+      }
+
+      // 3. Merge with local storage transactions for zero-latency instant history
+      let localCached: Transaction[] = []
+      try {
+        const raw = localStorage.getItem(`easyzpay_local_txs_${lower}`)
+        if (raw) {
+          localCached = JSON.parse(raw)
         }
       } catch {}
-      // Fallback to internal Next.js App Router API route (queries Turso + Arc Explorer live)
-      const localRes = await fetch(`/api/transactions/${address}`)
-      if (localRes.ok) return (await localRes.json()) as Transaction[]
-      return []
+
+      const txMap = new Map<string, Transaction>()
+      for (const tx of serverTxs) {
+        if (tx && tx.txHash) txMap.set(tx.txHash.toLowerCase(), tx)
+      }
+      for (const tx of localCached) {
+        if (tx && tx.txHash && !txMap.has(tx.txHash.toLowerCase())) {
+          txMap.set(tx.txHash.toLowerCase(), tx)
+        }
+      }
+
+      return Array.from(txMap.values()).sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      })
     },
     enabled: !!address,
-    refetchInterval: 5000,
+    retry: 2,
+    refetchInterval: 15000,
+    staleTime: 0,
   })
 
   if (!isConnected) {
@@ -188,6 +228,20 @@ export default function ActivityPage() {
                   <div key={i} style={{ height: '76px', borderRadius: '16px', background: 'var(--surface-raised)' }} className="shimmer" />
                 ))}
               </div>
+            ) : isError ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px dashed var(--border)', borderRadius: '16px' }}>
+                <div style={{ fontSize: '40px', marginBottom: '16px' }}>⚠️</div>
+                <h3 style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 800, marginBottom: '6px' }}>Failed to load transactions</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>There was an error fetching your activity. Please try again.</p>
+                <button
+                  onClick={() => refetch()}
+                  style={{
+                    background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', padding: '10px 20px', fontSize: '13px', fontWeight: 800, cursor: 'pointer'
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
             ) : paginatedTxs.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px dashed var(--border)', borderRadius: '16px' }}>
                 <div style={{ fontSize: '40px', marginBottom: '16px' }}>🔍</div>
@@ -210,14 +264,15 @@ export default function ActivityPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {paginatedTxs.map(tx => {
                     const isSent = address ? tx.fromAddress.toLowerCase() === address.toLowerCase() : false
-                    const rawAmt = tx.amount ? parseInt(tx.amount) : 0
-                    const amountFormatted = !isNaN(rawAmt) ? (rawAmt / 1e6).toFixed(2) : '0.00'
+                    const num = parseFloat(tx.amount || '0')
+                    const amountFormatted = isNaN(num) ? '0.00' : (num > 1000000 ? (num / 1e6).toFixed(2) : num.toFixed(2))
+                    const isCrossPay = tx.type === 'CROSS_PAY'
                     const counterparty = isSent ? tx.toAddress : tx.fromAddress
                     const date = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
                     return (
                       <div
-                        key={tx.id}
+                        key={tx.id || tx.txHash}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '14px',
                           background: 'var(--surface-raised)', border: '1px solid var(--border)',
@@ -228,12 +283,14 @@ export default function ActivityPage() {
                         {/* Status Icon */}
                         <div style={{
                           width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-                          background: isSent ? 'var(--red-glow)' : 'var(--green-glow)',
-                          border: `1px solid ${isSent ? 'rgba(255,68,102,0.1)' : 'rgba(0,212,168,0.1)'}`,
+                          background: isCrossPay ? 'rgba(16, 53, 246, 0.1)' : isSent ? 'var(--red-glow)' : 'var(--green-glow)',
+                          border: `1px solid ${isCrossPay ? 'rgba(16, 53, 246, 0.2)' : isSent ? 'rgba(255,68,102,0.1)' : 'rgba(0,212,168,0.1)'}`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: isSent ? 'var(--red)' : 'var(--green)',
+                          color: isCrossPay ? 'var(--accent)' : isSent ? 'var(--red)' : 'var(--green)',
                         }}>
-                          {isSent ? (
+                          {isCrossPay ? (
+                            <MdSwapHoriz size={20} />
+                          ) : isSent ? (
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
                           ) : (
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="17" x2="7" y2="7"></line><polyline points="7 17 7 7 17 7"></polyline></svg>
@@ -244,7 +301,7 @@ export default function ActivityPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
                             <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
-                              {isSent ? 'USDC Outflow' : 'USDC Inflow'}
+                              {isCrossPay ? 'Cross-Chain USDC (CCTP)' : isSent ? 'USDC Outflow' : 'USDC Inflow'}
                             </span>
                             <span style={{ 
                               fontSize: '10px', 

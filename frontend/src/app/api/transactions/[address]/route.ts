@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { createPublicClient, http, parseAbiItem } from 'viem'
+import { createPublicClient, http, parseAbiItem, isAddress } from 'viem'
+import { ACTIVE_CHAIN, RPC_URL, USDC_ADDRESS, ROUTER_ADDRESS, EXPLORER_URL } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const arcClient = createPublicClient({
-  transport: http('https://rpc.mainnet.arc.io')
+  chain: ACTIVE_CHAIN as any,
+  transport: http(RPC_URL)
 })
 
 export async function GET(
@@ -37,7 +39,48 @@ export async function GET(
       console.warn('[Transactions API] Turso DB read warning:', dbErr)
     }
 
-    // 2. Fetch live on-chain token transactions directly from Arc Mainnet Blockscout API
+    // 2. Fetch cross-chain transfers from Turso Cloud Database
+    let crossPayTxs: any[] = []
+    try {
+      const dbCrossPays = await db.crossPay.findMany({
+        where: {
+          OR: [
+            { senderAddress: addrLower },
+            { recipientAddress: addrLower }
+          ]
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      })
+
+      for (const cp of dbCrossPays) {
+        if (cp.sourceTxHash) {
+          const isComplete = cp.status === 'complete' || cp.status === 'COMPLETED'
+          crossPayTxs.push({
+            id: cp.id,
+            txHash: cp.sourceTxHash,
+            fromAddress: cp.senderAddress,
+            toAddress: cp.recipientAddress,
+            amount: cp.amount,
+            token: cp.token || 'USDC',
+            chainId: cp.sourceChain,
+            sourceChain: cp.sourceChain,
+            destinationChain: cp.destinationChain,
+            destinationTxHash: cp.destinationTxHash || undefined,
+            type: 'CROSS_PAY',
+            status: isComplete ? 'COMPLETED' : 'PENDING',
+            memo: `Cross-chain USDC: ${cp.sourceChain} → ${cp.destinationChain}`,
+            explorerUrl: `${EXPLORER_URL}/tx/${cp.sourceTxHash}`,
+            timestamp: cp.createdAt.toISOString(),
+            confirmedAt: isComplete ? cp.updatedAt.toISOString() : undefined,
+          })
+        }
+      }
+    } catch (cpErr) {
+      console.warn('[Transactions API] CrossPay read warning:', cpErr)
+    }
+
+    // 3. Fetch live on-chain token transactions directly from Arc Mainnet Blockscout API
     let onChainTxs: any[] = []
     const fetchHeaders = {
       'Accept': 'application/json',
@@ -45,7 +88,7 @@ export async function GET(
     }
 
     try {
-      const tokenTxUrl = `https://explorer.arc.io/api?module=account&action=tokentx&address=${addrLower}`
+      const tokenTxUrl = `${EXPLORER_URL}/api?module=account&action=tokentx&address=${addrLower}`
       const res = await fetch(tokenTxUrl, { headers: fetchHeaders, cache: 'no-store' })
       if (res.ok) {
         const text = await res.text()
@@ -58,16 +101,16 @@ export async function GET(
               const formattedAmount = (Number(rawAmount) / Math.pow(10, decimals)).toString()
 
               onChainTxs.push({
-                id: tx.hash + '_' + tx.from + '_' + tx.nonce,
+                id: tx.hash + '_' + tx.from + '_' + (tx.nonce || '0'),
                 txHash: tx.hash,
                 fromAddress: tx.from.toLowerCase(),
                 toAddress: tx.to.toLowerCase(),
                 amount: formattedAmount,
                 token: tx.tokenSymbol || 'USDC',
-                chainId: 5042,
+                chainId: ACTIVE_CHAIN.id,
                 type: tx.from.toLowerCase() === addrLower ? 'SEND' : 'RECEIVE',
                 status: 'COMPLETED',
-                explorerUrl: `https://explorer.arc.io/tx/${tx.hash}`,
+                explorerUrl: `${EXPLORER_URL}/tx/${tx.hash}`,
                 timestamp: new Date(Number(tx.timeStamp) * 1000).toISOString(),
                 confirmedAt: new Date(Number(tx.timeStamp) * 1000).toISOString(),
               })
@@ -79,33 +122,78 @@ export async function GET(
       console.warn('[Transactions API] Arc Explorer API tokentx warning:', explorerErr)
     }
 
-    // 3. Fallback: Query live RPC node (last 2000 blocks) if Blockscout was blocked
-    if (onChainTxs.length === 0) {
+    // 4. Fallback: Query live RPC node (last 4500 blocks) if Blockscout was blocked or returned empty
+    if (onChainTxs.length === 0 && isAddress(targetAddress)) {
       try {
         const latestBlock = await arcClient.getBlockNumber()
-        const fromBlock = latestBlock > 2000n ? latestBlock - 2000n : 0n
+        // Stay within Arc's 5000 block max query range
+        const fromBlock = latestBlock > 4500n ? latestBlock - 4500n : 0n
 
         const transferEvent = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)')
-        
-        const [sentLogs, receivedLogs] = await Promise.all([
+        const paymentSentEvent = parseAbiItem('event PaymentSent(address indexed from, address indexed to, uint256 amount, string memo)')
+
+        const [sentLogs, receivedLogs, routerSentLogs, routerReceivedLogs] = await Promise.all([
           arcClient.getLogs({
-            address: '0x3600000000000000000000000000000000000000',
+            address: USDC_ADDRESS,
             event: transferEvent,
             args: { from: targetAddress },
             fromBlock,
             toBlock: 'latest'
           }).catch(() => []),
           arcClient.getLogs({
-            address: '0x3600000000000000000000000000000000000000',
+            address: USDC_ADDRESS,
             event: transferEvent,
+            args: { to: targetAddress },
+            fromBlock,
+            toBlock: 'latest'
+          }).catch(() => []),
+          arcClient.getLogs({
+            address: ROUTER_ADDRESS,
+            event: paymentSentEvent,
+            args: { from: targetAddress },
+            fromBlock,
+            toBlock: 'latest'
+          }).catch(() => []),
+          arcClient.getLogs({
+            address: ROUTER_ADDRESS,
+            event: paymentSentEvent,
             args: { to: targetAddress },
             fromBlock,
             toBlock: 'latest'
           }).catch(() => [])
         ])
 
-        const rpcLogs = [...sentLogs, ...receivedLogs]
-        for (const log of rpcLogs) {
+        // Process Router events first (they include memos)
+        const routerLogs = [...routerSentLogs, ...routerReceivedLogs]
+        for (const log of routerLogs) {
+          if (log.transactionHash && log.args) {
+            const rawVal = log.args.amount ? log.args.amount.toString() : '0'
+            const formatted = (Number(rawVal) / 1e6).toString()
+            const fromAddr = log.args.from?.toLowerCase() || ''
+            const toAddr = log.args.to?.toLowerCase() || ''
+            const memo = log.args.memo || ''
+
+            onChainTxs.push({
+              id: log.transactionHash + '_' + fromAddr,
+              txHash: log.transactionHash,
+              fromAddress: fromAddr,
+              toAddress: toAddr,
+              amount: formatted,
+              memo,
+              token: 'USDC',
+              chainId: ACTIVE_CHAIN.id,
+              type: fromAddr === addrLower ? 'SEND' : 'RECEIVE',
+              status: 'COMPLETED',
+              explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
+              timestamp: new Date().toISOString(),
+              confirmedAt: new Date().toISOString(),
+            })
+          }
+        }
+
+        // Process ERC-20 transfer events
+        const transferLogs = [...sentLogs, ...receivedLogs]
+        for (const log of transferLogs) {
           if (log.transactionHash && log.args) {
             const rawVal = log.args.value ? log.args.value.toString() : '0'
             const formatted = (Number(rawVal) / 1e6).toString()
@@ -119,10 +207,10 @@ export async function GET(
               toAddress: toAddr,
               amount: formatted,
               token: 'USDC',
-              chainId: 5042,
+              chainId: ACTIVE_CHAIN.id,
               type: fromAddr === addrLower ? 'SEND' : 'RECEIVE',
               status: 'COMPLETED',
-              explorerUrl: `https://explorer.arc.io/tx/${log.transactionHash}`,
+              explorerUrl: `${EXPLORER_URL}/tx/${log.transactionHash}`,
               timestamp: new Date().toISOString(),
               confirmedAt: new Date().toISOString(),
             })
@@ -133,7 +221,7 @@ export async function GET(
       }
     }
 
-    // 4. Merge DB transactions and On-chain Explorer/RPC transactions deduplicated by txHash
+    // 5. Merge all sources deduplicated by txHash
     const txMap = new Map<string, any>()
 
     // First add on-chain transactions
@@ -141,17 +229,26 @@ export async function GET(
       txMap.set(tx.txHash.toLowerCase(), tx)
     }
 
-    // Overlay DB transactions (which contain extra metadata like memos, usernames)
+    // Add CrossPay transactions
+    for (const tx of crossPayTxs) {
+      const existing = txMap.get(tx.txHash.toLowerCase())
+      txMap.set(tx.txHash.toLowerCase(), {
+        ...existing,
+        ...tx,
+      })
+    }
+
+    // Overlay DB transactions (which contain memos, usernames, specific types)
     for (const tx of dbTxs) {
       const existing = txMap.get(tx.txHash.toLowerCase())
       txMap.set(tx.txHash.toLowerCase(), {
         ...existing,
         ...tx,
-        explorerUrl: tx.explorerUrl || `https://explorer.arc.io/tx/${tx.txHash}`,
+        explorerUrl: tx.explorerUrl || `${EXPLORER_URL}/tx/${tx.txHash}`,
         type: tx.type || existing?.type || 'SEND',
         token: tx.token || existing?.token || 'USDC',
-        chainId: tx.chainId || 5042,
-        timestamp: tx.timestamp || existing?.timestamp,
+        chainId: tx.chainId || ACTIVE_CHAIN.id,
+        timestamp: tx.timestamp || existing?.timestamp || new Date().toISOString(),
       })
     }
 

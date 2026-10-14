@@ -224,6 +224,10 @@ export function getCctpConfig(chainId: number): CctpChainConfig {
   return CCTP_V2_CONFIGS[chainId] || CCTP_V2_CONFIGS[fallbackId]
 }
 
+export function getCctpConfigByDomain(domain: number): CctpChainConfig | undefined {
+  return Object.values(CCTP_V2_CONFIGS).find(c => c.domain === domain)
+}
+
 export function addressToBytes32(address: string): `0x${string}` {
   if (!address || typeof address !== 'string' || !address.startsWith('0x') || address.length !== 42) {
     throw new Error(`Invalid EVM address for CCTP conversion: "${address}"`)

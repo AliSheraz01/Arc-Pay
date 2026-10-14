@@ -177,7 +177,7 @@ export function Sidebar() {
             </span>
           </Link>
 
-          {/* Navigation links */}
+          {/* Navigation links (Ref 1: Pierre Sù capsule nav with tap bounce) */}
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {navItems.map(item => {
               const isActive = pathname === item.href || (item.href.startsWith('/receive?tab') && pathname === '/receive')
@@ -186,35 +186,10 @@ export function Sidebar() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                    background: isActive ? 'var(--accent-glow)' : 'transparent',
-                    textDecoration: 'none',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    border: isActive ? '1px solid var(--border-accent)' : '1px solid transparent',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={e => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = 'var(--text-primary)'
-                      e.currentTarget.style.background = 'var(--surface-raised)'
-                    }
-                  }}
-                  onMouseOut={e => {
-                    if (!isActive) {
-                      e.currentTarget.style.color = 'var(--text-secondary)'
-                      e.currentTarget.style.background = 'transparent'
-                    }
-                  }}
+                  className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
                 >
                   <Icon size={18} />
-                  {item.label}
+                  <span>{item.label}</span>
                 </Link>
               )
             })}
@@ -407,32 +382,28 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile Tab Bottom Navigation */}
-      <nav className="mobile-nav" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: '64px', position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100 }}>
+      {/* Mobile Tab Bottom Navigation (Ref 2: Pinterest Fluid Pop-up Bubble) */}
+      <nav className="mobile-nav">
         {navItems.map(item => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || (item.href.startsWith('/receive?tab') && pathname === '/receive')
           const Icon = item.icon
           return (
             <Link
               key={item.label}
               href={item.href}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '2px',
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                textDecoration: 'none',
-                fontSize: '10px',
-                fontWeight: 700,
-                flex: 1,
-                height: '100%',
-                transition: 'all 0.2s',
-              }}
+              className={`mobile-nav-item ${isActive ? 'active' : ''}`}
             >
-              <Icon size={19} />
-              <span style={{ fontSize: '9px', whiteSpace: 'nowrap' }}>{item.label}</span>
+              {/* Floating Arc Blue Bubble that pops up above nav bar */}
+              <div className="mobile-nav-bubble">
+                <Icon size={20} />
+              </div>
+
+              {/* Inactive Static Icon */}
+              <div className="mobile-nav-static-icon">
+                <Icon size={19} />
+              </div>
+
+              <span className="mobile-nav-label">{item.label}</span>
             </Link>
           )
         })}

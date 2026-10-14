@@ -43,10 +43,10 @@ const _rawBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 export const BACKEND_URL = (() => {
   const url = _rawBackendUrl.replace(/\/+$/, '') // trim trailing slashes
   if (url && !/^https?:\/\//i.test(url)) {
-    throw new Error(
-      `NEXT_PUBLIC_BACKEND_URL must be an http(s) URL, not "${url}". ` +
-      `If you see "libsql://", that is the database URL and must only be used server-side.`
+    console.warn(
+      `[Config] NEXT_PUBLIC_BACKEND_URL is "${url}" (not an http(s) URL). Falling back to internal Next.js API routes.`
     )
+    return ''
   }
   return url
 })()

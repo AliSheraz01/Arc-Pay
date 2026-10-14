@@ -7,9 +7,9 @@ import { useChainId } from 'wagmi'
 export function FaucetModal() {
   const [open, setOpen] = useState(false)
   const chainId = useChainId()
-  const isMainnet = chainId === 5042
+  const isTestnet = chainId === 5042002
 
-  if (isMainnet) return null
+  if (!isTestnet) return null
 
   return (
     <>

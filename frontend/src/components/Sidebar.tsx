@@ -16,18 +16,84 @@ import {
   MdLink,
   MdAutoAwesome,
   MdSwapHoriz,
+  MdClose,
+  MdCheck
 } from 'react-icons/md'
+
+const SUPPORTED_NETWORKS = [
+  {
+    chainId: 5042,
+    name: 'Arc Mainnet',
+    shortName: 'Arc',
+    color: '#1035f6',
+    logoUrl: 'https://explorer.arc.io/favicon.ico',
+  },
+  {
+    chainId: 8453,
+    name: 'Base',
+    shortName: 'Base',
+    color: '#0052ff',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+  },
+  {
+    chainId: 1,
+    name: 'Ethereum',
+    shortName: 'ETH',
+    color: '#627eea',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+  },
+  {
+    chainId: 42161,
+    name: 'Arbitrum One',
+    shortName: 'ARB',
+    color: '#28a0f0',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+  },
+  {
+    chainId: 10,
+    name: 'OP Mainnet',
+    shortName: 'OP',
+    color: '#ff0420',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
+  },
+  {
+    chainId: 137,
+    name: 'Polygon',
+    shortName: 'POL',
+    color: '#8247e5',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+  },
+  {
+    chainId: 43114,
+    name: 'Avalanche',
+    shortName: 'AVAX',
+    color: '#e84142',
+    logoUrl: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchex/info/logo.png',
+  },
+]
 
 export function Sidebar() {
   const pathname = usePathname()
   const [theme, setTheme] = useState<'dark' | 'light'>('light')
+  const [showNetworkModal, setShowNetworkModal] = useState(false)
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
 
-  const ARC_MAINNET_ID = 5042
-  const ARC_TESTNET_ID = 5042002
-
-  const isMainnet = chainId === ARC_MAINNET_ID
+  const currentNetwork = SUPPORTED_NETWORKS.find(n => n.chainId === chainId) || {
+    chainId: chainId || 5042,
+    name: chainId === 8453 ? 'Base' 
+      : chainId === 1 ? 'Ethereum' 
+      : chainId === 42161 ? 'Arbitrum One' 
+      : chainId === 10 ? 'OP Mainnet' 
+      : chainId === 137 ? 'Polygon' 
+      : chainId === 43114 ? 'Avalanche' 
+      : chainId === 5042 ? 'Arc Mainnet' 
+      : chainId === 5042002 ? 'Arc Testnet' 
+      : chainId ? `Chain ${chainId}` 
+      : 'Arc Mainnet',
+    color: chainId === 8453 ? '#0052ff' : '#1035f6',
+    logoUrl: chainId === 8453 ? 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png' : undefined,
+  }
 
   // Load theme on mount
   useEffect(() => {
@@ -45,16 +111,6 @@ export function Sidebar() {
     setTheme(nextTheme)
     localStorage.setItem('theme', nextTheme)
     document.documentElement.setAttribute('data-theme', nextTheme)
-  }
-
-  const handleSwitchNetwork = async () => {
-    if (!switchChainAsync) return
-    const targetChain = isMainnet ? ARC_TESTNET_ID : ARC_MAINNET_ID
-    try {
-      await switchChainAsync({ chainId: targetChain })
-    } catch (e) {
-      console.error('Failed to switch network', e)
-    }
   }
 
   const isCrossPayEnabled = process.env.NEXT_PUBLIC_ENABLE_CROSS_PAY === 'true'
@@ -169,7 +225,8 @@ export function Sidebar() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Network Switcher */}
           <button
-            onClick={handleSwitchNetwork}
+            type="button"
+            onClick={() => setShowNetworkModal(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -181,21 +238,28 @@ export function Sidebar() {
               cursor: 'pointer',
               color: 'var(--text-primary)',
               transition: 'all 0.2s',
+              width: '100%',
+              textAlign: 'left'
             }}
             onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
             onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
           >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Current Network</span>
-              <span style={{ fontSize: '13px', fontWeight: 800, color: isMainnet ? 'var(--accent)' : '#6b5bff' }}>
-                {isMainnet ? 'Arc Mainnet' : 'Arc Testnet'}
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Current Network
               </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <SidebarChainLogo chain={currentNetwork} size={18} />
+                <span style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {currentNetwork.name}
+                </span>
+              </div>
             </div>
             <MdSwapHoriz size={20} style={{ color: 'var(--text-muted)' }} />
           </button>
 
-          {/* Faucet Promo Card - Hidden on Mainnet */}
-          {!isMainnet && (
+          {/* Faucet Promo Card - Only on Arc Testnet */}
+          {chainId === 5042002 && (
             <a
               href="https://faucet.circle.com"
               target="_blank"
@@ -373,6 +437,155 @@ export function Sidebar() {
           )
         })}
       </nav>
+
+      {/* Network Switcher Modal */}
+      {showNetworkModal && (
+        <div 
+          onClick={() => setShowNetworkModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px'
+          }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '24px',
+              maxWidth: '400px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                Select Network
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowNetworkModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}
+              >
+                <MdClose size={20} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 18px 0' }}>
+              Switch your wallet to any supported network.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {SUPPORTED_NETWORKS.map(net => {
+                const isSelected = net.chainId === chainId
+                return (
+                  <button
+                    key={net.chainId}
+                    type="button"
+                    onClick={async () => {
+                      setShowNetworkModal(false)
+                      if (switchChainAsync && net.chainId !== chainId) {
+                        try {
+                          await switchChainAsync({ chainId: net.chainId })
+                        } catch (err) {
+                          console.error('Failed to switch chain:', err)
+                        }
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      borderRadius: '14px',
+                      background: isSelected ? 'var(--accent-glow)' : 'var(--surface-raised)',
+                      border: isSelected ? '1px solid var(--border-accent)' : '1px solid var(--border)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      textAlign: 'left',
+                      width: '100%'
+                    }}
+                    onMouseOver={e => {
+                      if (!isSelected) e.currentTarget.style.borderColor = 'var(--accent)'
+                    }}
+                    onMouseOut={e => {
+                      if (!isSelected) e.currentTarget.style.borderColor = 'var(--border)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <SidebarChainLogo chain={net} size={22} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {net.name}
+                      </span>
+                    </div>
+
+                    {isSelected && (
+                      <span style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        color: 'var(--green)',
+                        background: 'rgba(0, 212, 168, 0.1)',
+                        padding: '3px 8px',
+                        borderRadius: '8px'
+                      }}>
+                        <MdCheck size={14} /> Connected
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  )
+}
+
+function SidebarChainLogo({ chain, size = 18 }: { chain: { chainId: number; name: string; color?: string; logoUrl?: string }; size?: number }) {
+  const [imgError, setImgError] = useState(false)
+
+  if (chain.chainId === 5042 || chain.chainId === 5042002) {
+    return (
+      <div style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: '#1035f6',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none">
+          <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (chain.logoUrl && !imgError) {
+    return (
+      <img
+        src={chain.logoUrl}
+        alt={chain.name}
+        onError={() => setImgError(true)}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+
+  return (
+    <span style={{ width: size, height: size, borderRadius: '50%', background: chain.color || '#3b82f6', flexShrink: 0, display: 'inline-block' }} />
   )
 }

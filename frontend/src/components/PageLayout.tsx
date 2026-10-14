@@ -27,20 +27,8 @@ export function PageLayout({ children }: PageLayoutProps) {
           height: '72px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
         }}>
-          {/* Left indicator (hidden on desktop if sidebar already has it, but good for mobile) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#3b82f6',
-              display: 'inline-block'
-            }} />
-            <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>Arc Testnet</span>
-          </div>
-
           {/* Right section - Faucet + Connect Wallet */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <FaucetModal />

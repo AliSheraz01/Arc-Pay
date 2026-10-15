@@ -261,5 +261,52 @@ model ScheduledPayout {
   updatedAt    DateTime @updatedAt
 }
 
+model WhatsAppSession {
+  id                         String              @id @default(uuid())
+  phoneId                    String?             @unique // WhatsApp sender phone number or ID
+  pairingToken               String              @unique // Time-sensitive code (e.g. ARC-8492)
+  pairingTokenExpiresAt      DateTime
+  smartAccountAddress        String
+  ownerAddress               String
+  sessionPublicKey           String              // Session key address
+  sessionPrivateKeyEncrypted String              // Encrypted private key for relayer
+  spendingLimit              String              // In USDC (e.g. "50.0")
+  spentAmount                String              @default("0")
+  validUntil                 DateTime
+  status                     String              @default("PENDING_PAIRING") // PENDING_PAIRING, PAIRED, EXPIRED, REVOKED
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  intents                    ChatPaymentIntent[]
+
+  @@index([phoneId])
+  @@index([pairingToken])
+  @@index([ownerAddress])
+}
+
+model ChatPaymentIntent {
+  id               String          @id @default(uuid())
+  phoneId          String
+  sessionId        String
+  rawMessage       String
+  action           String          @default("PAY")
+  amount           String          // e.g. "5.0"
+  asset            String          @default("USDC")
+  recipientInput   String          // e.g. "@alisheraz" or "0x..."
+  recipientType    String          // "USERNAME" | "WALLET"
+  resolvedAddress  String          // Validated 0x address
+  status           String          @default("AWAITING_CONFIRMATION") // AWAITING_CONFIRMATION, CONFIRMED, REJECTED, EXECUTED, FAILED
+  expiresAt        DateTime
+  txHash           String?
+  userOpHash       String?
+  errorMessage     String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  session          WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([phoneId])
+  @@index([sessionId])
+  @@index([status])
+}
+
 
 

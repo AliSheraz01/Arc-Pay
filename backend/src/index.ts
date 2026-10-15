@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { createPublicClient, http, decodeFunctionData, isAddress, createWalletClient, defineChain, parseUnits } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import cron from 'node-cron';
+import { createChatToPayRouter } from './chatToPay/routes';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use('/api/chat-to-pay', createChatToPayRouter(prisma));
 
 // Environment & Network configuration — single source of truth
 const NETWORK_MODE: 'mainnet' | 'testnet' =
@@ -939,7 +941,7 @@ app.get('/api/resolve/:username', async (req, res) => {
     // 3. Fallback to querying the blockchain directly
     console.log(`[Resolve] Username @${cleanUsername} not in DB, querying on-chain registry...`);
     try {
-      const resolvedAddress = await viemClient.readContract({
+      const resolvedAddress = await (viemClient as any).readContract({
         address: REGISTRY_ADDRESS,
         abi: [
           {
@@ -1170,10 +1172,6 @@ app.get('/api/requests/:address', async (req, res) => {
 // BLOCKCHAIN EVENT INDEXER (PRODUCTION ARC MAINNET / TESTNET)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const IS_MAINNET = (process.env.NETWORK_MODE || process.env.NEXT_PUBLIC_NETWORK || 'mainnet') === 'mainnet';
-const CHAIN_ID = IS_MAINNET ? 5042 : 5042002;
-const RPC_URL = process.env.RPC_URL || process.env.NEXT_PUBLIC_ARC_RPC_URL || (IS_MAINNET ? 'https://rpc.mainnet.arc.io' : 'https://rpc.testnet.arc.network');
-const EXPLORER_URL = IS_MAINNET ? 'https://explorer.arc.io' : 'https://testnet.arcscan.app';
 const START_BLOCK = process.env.START_BLOCK ? BigInt(process.env.START_BLOCK) : (IS_MAINNET ? 24000000n : 44800000n);
 
 const REGISTRY_ADDRESS = (process.env.NEXT_PUBLIC_USERNAME_REGISTRY || process.env.REGISTRY_ADDRESS || '0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D') as `0x${string}`;
@@ -1567,7 +1565,7 @@ function startSchedulerCron() {
         try {
           console.log(`[Scheduler] Executing schedule ${schedule.id} (${schedule.name})...`);
           
-          const txHash = await keeperWalletClient.writeContract({
+          const txHash = await (keeperWalletClient as any).writeContract({
             address: SCHEDULER_ADDRESS,
             abi: schedulerABI,
             functionName: 'executeSchedule',

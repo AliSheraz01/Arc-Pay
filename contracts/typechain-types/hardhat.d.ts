@@ -50,9 +50,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SafeERC20__factory>;
     getContractFactory(
+      name: "ECDSA",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ECDSA__factory>;
+    getContractFactory(
+      name: "MessageHashUtils",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MessageHashUtils__factory>;
+    getContractFactory(
       name: "IERC165",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
+    getContractFactory(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SafeCast__factory>;
     getContractFactory(
       name: "Pausable",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -61,6 +73,30 @@ declare module "hardhat/types/runtime" {
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ReentrancyGuard__factory>;
+    getContractFactory(
+      name: "Strings",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Strings__factory>;
+    getContractFactory(
+      name: "ArcPayAccountFactory",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ArcPayAccountFactory__factory>;
+    getContractFactory(
+      name: "ArcPaySessionKeyModule",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ArcPaySessionKeyModule__factory>;
+    getContractFactory(
+      name: "ArcPaySmartAccount",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ArcPaySmartAccount__factory>;
+    getContractFactory(
+      name: "IAccount",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IAccount__factory>;
+    getContractFactory(
+      name: "IEntryPoint",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IEntryPoint__factory>;
     getContractFactory(
       name: "ArcPayBulkRouter",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -132,10 +168,25 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SafeERC20>;
     getContractAt(
+      name: "ECDSA",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ECDSA>;
+    getContractAt(
+      name: "MessageHashUtils",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MessageHashUtils>;
+    getContractAt(
       name: "IERC165",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
+    getContractAt(
+      name: "SafeCast",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SafeCast>;
     getContractAt(
       name: "Pausable",
       address: string | ethers.Addressable,
@@ -146,6 +197,36 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ReentrancyGuard>;
+    getContractAt(
+      name: "Strings",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Strings>;
+    getContractAt(
+      name: "ArcPayAccountFactory",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ArcPayAccountFactory>;
+    getContractAt(
+      name: "ArcPaySessionKeyModule",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ArcPaySessionKeyModule>;
+    getContractAt(
+      name: "ArcPaySmartAccount",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ArcPaySmartAccount>;
+    getContractAt(
+      name: "IAccount",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IAccount>;
+    getContractAt(
+      name: "IEntryPoint",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IEntryPoint>;
     getContractAt(
       name: "ArcPayBulkRouter",
       address: string | ethers.Addressable,
@@ -214,9 +295,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SafeERC20>;
     deployContract(
+      name: "ECDSA",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ECDSA>;
+    deployContract(
+      name: "MessageHashUtils",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MessageHashUtils>;
+    deployContract(
       name: "IERC165",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
+    deployContract(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
     deployContract(
       name: "Pausable",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -225,6 +318,30 @@ declare module "hardhat/types/runtime" {
       name: "ReentrancyGuard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "Strings",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Strings>;
+    deployContract(
+      name: "ArcPayAccountFactory",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPayAccountFactory>;
+    deployContract(
+      name: "ArcPaySessionKeyModule",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPaySessionKeyModule>;
+    deployContract(
+      name: "ArcPaySmartAccount",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPaySmartAccount>;
+    deployContract(
+      name: "IAccount",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAccount>;
+    deployContract(
+      name: "IEntryPoint",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IEntryPoint>;
     deployContract(
       name: "ArcPayBulkRouter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -296,10 +413,25 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SafeERC20>;
     deployContract(
+      name: "ECDSA",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ECDSA>;
+    deployContract(
+      name: "MessageHashUtils",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MessageHashUtils>;
+    deployContract(
       name: "IERC165",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
+    deployContract(
+      name: "SafeCast",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
     deployContract(
       name: "Pausable",
       args: any[],
@@ -310,6 +442,36 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "Strings",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Strings>;
+    deployContract(
+      name: "ArcPayAccountFactory",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPayAccountFactory>;
+    deployContract(
+      name: "ArcPaySessionKeyModule",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPaySessionKeyModule>;
+    deployContract(
+      name: "ArcPaySmartAccount",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ArcPaySmartAccount>;
+    deployContract(
+      name: "IAccount",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IAccount>;
+    deployContract(
+      name: "IEntryPoint",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IEntryPoint>;
     deployContract(
       name: "ArcPayBulkRouter",
       args: any[],

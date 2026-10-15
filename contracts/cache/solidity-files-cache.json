@@ -8,9 +8,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -50,9 +50,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -88,9 +88,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -126,9 +126,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -162,9 +162,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -201,9 +201,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -237,9 +237,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -276,9 +276,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -312,9 +312,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -348,9 +348,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -384,9 +384,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -423,9 +423,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -461,9 +461,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -499,9 +499,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -539,9 +539,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -577,9 +577,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -618,9 +618,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -656,9 +656,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -694,9 +694,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -730,9 +730,9 @@
       "solcConfig": {
         "version": "0.8.24",
         "settings": {
-          "evmVersion": "paris",
+          "evmVersion": "cancun",
           "optimizer": {
-            "enabled": false,
+            "enabled": true,
             "runs": 200
           },
           "outputSelection": {
@@ -759,6 +759,541 @@
       ],
       "artifacts": [
         "MockUSDC"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\ArcPayAccountFactory.sol": {
+      "lastModificationDate": 1791990737315,
+      "contentHash": "a8c7f2bfca9e3fe00986106f9653e511",
+      "sourceName": "contracts/account/ArcPayAccountFactory.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./ArcPaySmartAccount.sol",
+        "./IEntryPoint.sol",
+        "./ArcPaySessionKeyModule.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ArcPayAccountFactory"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\ArcPaySmartAccount.sol": {
+      "lastModificationDate": 1791990393103,
+      "contentHash": "2a2700c1f01db644482ddc4041ff6130",
+      "sourceName": "contracts/account/ArcPaySmartAccount.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./IAccount.sol",
+        "./IEntryPoint.sol",
+        "./UserOperation.sol",
+        "./ArcPaySessionKeyModule.sol",
+        "@openzeppelin/contracts/utils/cryptography/ECDSA.sol",
+        "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ArcPaySmartAccount"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\IEntryPoint.sol": {
+      "lastModificationDate": 1791990335164,
+      "contentHash": "cbfa5b714a8c268c02a2e359d5a9878f",
+      "sourceName": "contracts/account/IEntryPoint.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./UserOperation.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "IEntryPoint"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\ArcPaySessionKeyModule.sol": {
+      "lastModificationDate": 1791990546728,
+      "contentHash": "9c99e965978033100adc3d0f127c8624",
+      "sourceName": "contracts/account/ArcPaySessionKeyModule.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./UserOperation.sol",
+        "@openzeppelin/contracts/utils/cryptography/ECDSA.sol",
+        "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ArcPaySessionKeyModule"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\IAccount.sol": {
+      "lastModificationDate": 1791990315101,
+      "contentHash": "d0acc1d3cf6d5277eaa59f72b049d6bd",
+      "sourceName": "contracts/account/IAccount.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./UserOperation.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "IAccount"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\contracts\\account\\UserOperation.sol": {
+      "lastModificationDate": 1791990277678,
+      "contentHash": "b64fb00cd667d815f7192917efbc1b53",
+      "sourceName": "contracts/account/UserOperation.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": []
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\cryptography\\MessageHashUtils.sol": {
+      "lastModificationDate": 1779183745880,
+      "contentHash": "fab97298382d4c32182a66ec35255b71",
+      "sourceName": "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../Strings.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "MessageHashUtils"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\cryptography\\ECDSA.sol": {
+      "lastModificationDate": 1779183744937,
+      "contentHash": "b038f3665d2262af34fe6009e3cd78dd",
+      "sourceName": "@openzeppelin/contracts/utils/cryptography/ECDSA.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "ECDSA"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Strings.sol": {
+      "lastModificationDate": 1779183746193,
+      "contentHash": "d2fa243e766a193585b7e9bf36898d80",
+      "sourceName": "@openzeppelin/contracts/utils/Strings.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./math/Math.sol",
+        "./math/SafeCast.sol",
+        "./math/SignedMath.sol",
+        "./Bytes.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "Strings"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\math\\Math.sol": {
+      "lastModificationDate": 1779183745863,
+      "contentHash": "5b8c6935ac52b7494df19d6feb38f5cc",
+      "sourceName": "@openzeppelin/contracts/utils/math/Math.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../Panic.sol",
+        "./SafeCast.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Math"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\math\\SignedMath.sol": {
+      "lastModificationDate": 1779183746098,
+      "contentHash": "ae3528afb8bdb0a7dcfba5b115ee8074",
+      "sourceName": "@openzeppelin/contracts/utils/math/SignedMath.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./SafeCast.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SignedMath"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Bytes.sol": {
+      "lastModificationDate": 1779183744716,
+      "contentHash": "3b32ea3a40a2d708f61e7161f081ca93",
+      "sourceName": "@openzeppelin/contracts/utils/Bytes.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./math/Math.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "Bytes"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\math\\SafeCast.sol": {
+      "lastModificationDate": 1779183746072,
+      "contentHash": "f28a38cd37f4225d0a91fb5405dd850f",
+      "sourceName": "@openzeppelin/contracts/utils/math/SafeCast.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "SafeCast"
+      ]
+    },
+    "E:\\Arc pay\\contracts\\node_modules\\@openzeppelin\\contracts\\utils\\Panic.sol": {
+      "lastModificationDate": 1779183745974,
+      "contentHash": "2133dc13536b4a6a98131e431fac59e1",
+      "sourceName": "@openzeppelin/contracts/utils/Panic.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "cancun",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Panic"
       ]
     }
   }

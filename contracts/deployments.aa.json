@@ -1,0 +1,9 @@
+{
+  "network": "arc_mainnet",
+  "chainId": 5042,
+  "entryPointAddress": "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
+  "sessionKeyModuleAddress": "0xbf4286a0A3E47F33c1DB9DC0E2aB2F8FC01edd77",
+  "accountFactoryAddress": "0x994a7D6A2764A3Bf4Db80337e58256d265982E05",
+  "deployedAt": "2026-10-15T04:32:16.912Z",
+  "deployer": "0xB8e9C9659677511Be855A8582c028F3ae6d108D4"
+}

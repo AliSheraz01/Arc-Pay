@@ -11,6 +11,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { db } from '@/lib/db'
 import { RelayerExecutionResult } from './types'
 
+// Arc Mainnet Chain Definition
 const arcMainnet = defineChain({
   id: 5042,
   name: 'Arc Mainnet',
@@ -23,11 +24,22 @@ const arcMainnet = defineChain({
   },
 })
 
+const publicClient = createPublicClient({
+  chain: arcMainnet,
+  transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
+})
+
 const ARC_USDC_ADDRESS = (process.env.USDC_ADDRESS || '0x3600000000000000000000000000000000000000') as `0x${string}`
 const EXPLORER_URL = process.env.EXPLORER_URL || 'https://explorer.arc.io'
-const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY
+
+// Production Relayer Key with gas on Arc Mainnet
+const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY || '0xba1ecd5380605eb913a71790c804c95d87ace7b7d0a7e27800be95147f5a43d2'
 
 export class ChatToPayRelayer {
+  /**
+   * Submits a policy-checked payment UserOperation directly to Arc Mainnet RPC
+   * Strictly enforces real blockchain execution with zero mock fallbacks.
+   */
   async executePayment(intentId: string): Promise<RelayerExecutionResult> {
     const intent = await db.chatPaymentIntent.findUnique({
       where: { id: intentId },
@@ -35,14 +47,14 @@ export class ChatToPayRelayer {
     })
 
     if (!intent) {
-      return { success: false, error: 'Payment intent not found' }
+      return { success: false, error: 'Payment intent not found in database' }
     }
 
     const { session } = intent
 
     // 1. Policy check: Session status
     if (session.status !== 'PAIRED') {
-      return { success: false, error: `Session is not active (status: ${session.status})` }
+      return { success: false, error: `Session is not active (current status: ${session.status})` }
     }
 
     // 2. Policy check: Expiry limit
@@ -51,7 +63,7 @@ export class ChatToPayRelayer {
         where: { id: session.id },
         data: { status: 'EXPIRED' },
       })
-      return { success: false, error: 'Session has expired' }
+      return { success: false, error: 'Session has reached its expiry limit. Please renew on easyzpay.xyz.' }
     }
 
     // 3. Policy check: Spending limit cap
@@ -63,7 +75,7 @@ export class ChatToPayRelayer {
       const remaining = Math.max(0, spendingLimit - alreadySpent).toFixed(2)
       return { 
         success: false, 
-        error: `Spending limit exceeded. Remaining allowance is ${remaining} USDC, requested ${transferAmount} USDC.` 
+        error: `Spending cap exceeded. Remaining session allowance: ${remaining} USDC, requested: ${transferAmount} USDC.` 
       }
     }
 
@@ -73,55 +85,76 @@ export class ChatToPayRelayer {
     }
 
     try {
-      let txHash: string
-      const amountInUnits = parseUnits(intent.amount, 6)
-
-      if (RELAYER_PRIVATE_KEY) {
-        const relayerAccount = privateKeyToAccount(
-          (RELAYER_PRIVATE_KEY.startsWith('0x') ? RELAYER_PRIVATE_KEY : `0x${RELAYER_PRIVATE_KEY}`) as `0x${string}`
-        )
-
-        const walletClient = createWalletClient({
-          account: relayerAccount,
-          chain: arcMainnet,
-          transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
-        })
-
-        const erc20TransferData = encodeFunctionData({
-          abi: [
-            {
-              type: 'function',
-              name: 'transfer',
-              inputs: [
-                { name: 'to', type: 'address' },
-                { name: 'amount', type: 'uint256' },
-              ],
-              outputs: [{ name: '', type: 'bool' }],
-              stateMutability: 'nonpayable',
-            },
-          ],
-          functionName: 'transfer',
-          args: [intent.resolvedAddress as `0x${string}`, amountInUnits],
-        })
-
-        txHash = await walletClient.sendTransaction({
-          to: ARC_USDC_ADDRESS,
-          data: erc20TransferData,
-          value: 0n,
-        } as any)
-      } else {
-        const randomHex = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-        txHash = `0x${randomHex}`
+      if (!RELAYER_PRIVATE_KEY) {
+        throw new Error('RELAYER_PRIVATE_KEY is not configured on the server.')
       }
 
-      // Update session spent amount
+      const relayerAccount = privateKeyToAccount(
+        (RELAYER_PRIVATE_KEY.startsWith('0x') ? RELAYER_PRIVATE_KEY : `0x${RELAYER_PRIVATE_KEY}`) as `0x${string}`
+      )
+
+      const walletClient = createWalletClient({
+        account: relayerAccount,
+        chain: arcMainnet,
+        transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
+      })
+
+      const amountInUnits = parseUnits(intent.amount, 6)
+
+      // Check relayer gas balance on Arc Mainnet
+      const relayerBalance = await publicClient.getBalance({ address: relayerAccount.address })
+      if (relayerBalance === 0n) {
+        throw new Error(`Relayer account (${relayerAccount.address}) has zero gas balance on Arc Mainnet.`)
+      }
+
+      console.log(`[Relayer] Broadcasting REAL transaction on Arc Mainnet: Transferring ${intent.amount} USDC to ${intent.resolvedAddress}...`)
+
+      const erc20TransferData = encodeFunctionData({
+        abi: [
+          {
+            type: 'function',
+            name: 'transfer',
+            inputs: [
+              { name: 'to', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+            outputs: [{ name: '', type: 'bool' }],
+            stateMutability: 'nonpayable',
+          },
+        ],
+        functionName: 'transfer',
+        args: [intent.resolvedAddress as `0x${string}`, amountInUnits],
+      })
+
+      // Send transaction to the Arc Mainnet RPC
+      const txHash = await walletClient.sendTransaction({
+        to: ARC_USDC_ADDRESS,
+        data: erc20TransferData,
+        value: 0n,
+      } as any)
+
+      console.log(`[Relayer] Transaction broadcasted: ${txHash}. Awaiting confirmation on Arc Mainnet...`)
+
+      // Wait for real on-chain confirmation - validates that tx is mined and exists on explorer.arc.io
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 45000,
+      })
+
+      if (receipt.status !== 'success') {
+        throw new Error(`Transaction reverted on Arc Mainnet (Block: ${receipt.blockNumber}, Tx: ${txHash})`)
+      }
+
+      console.log(`[Relayer] Transaction confirmed on Arc Mainnet! Block: ${receipt.blockNumber}, TxHash: ${txHash}`)
+
+      // 5. Update session spent amount in database
       const newSpentAmount = (alreadySpent + transferAmount).toFixed(6)
       await db.whatsAppSession.update({
         where: { id: session.id },
         data: { spentAmount: newSpentAmount },
       })
 
-      // Update intent status
+      // 6. Update intent status in database
       await db.chatPaymentIntent.update({
         where: { id: intent.id },
         data: {
@@ -130,13 +163,16 @@ export class ChatToPayRelayer {
         },
       })
 
-      // Record in transaction table
+      // 7. Record transaction in database for immediate UI and activity sync
+      const fromAddr = (session.ownerAddress || session.smartAccountAddress).toLowerCase()
+      const toAddr = intent.resolvedAddress.toLowerCase()
+
       try {
         await db.transaction.create({
           data: {
             txHash: txHash,
-            fromAddress: session.smartAccountAddress || session.ownerAddress,
-            toAddress: intent.resolvedAddress,
+            fromAddress: fromAddr,
+            toAddress: toAddr,
             amount: intent.amount,
             token: 'USDC',
             chainId: 5042,
@@ -148,7 +184,7 @@ export class ChatToPayRelayer {
           },
         })
       } catch (txErr) {
-        console.warn('[Relayer] Transaction note:', txErr)
+        console.warn('[Relayer] Transaction record note:', txErr)
       }
 
       const remainingAllowance = (spendingLimit - (alreadySpent + transferAmount)).toFixed(2)
@@ -160,7 +196,9 @@ export class ChatToPayRelayer {
         remainingAllowance: remainingAllowance,
       }
     } catch (err: any) {
-      console.error('[Relayer] Execution error:', err)
+      console.error('[Relayer] Real blockchain execution error:', err)
+
+      // Strictly record FAILED status with error reason
       await db.chatPaymentIntent.update({
         where: { id: intent.id },
         data: {

@@ -132,6 +132,47 @@ export function createChatToPayRouter(prisma: PrismaClient): Router {
   });
 
   /**
+   * Active persistent session lookup for owner address
+   */
+  router.get('/session', async (req: Request, res: Response) => {
+    try {
+      const address = (req.query.address as string)?.toLowerCase();
+      if (!address) {
+        return res.status(400).json({ error: 'address parameter is required' });
+      }
+
+      const session = await prisma.whatsAppSession.findFirst({
+        where: {
+          ownerAddress: { equals: address },
+          status: 'PAIRED',
+          validUntil: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!session) {
+        return res.json({ found: false });
+      }
+
+      return res.json({
+        found: true,
+        session: {
+          paired: true,
+          sessionId: session.id,
+          phoneId: session.phoneId,
+          spendingLimit: session.spendingLimit,
+          spentAmount: session.spentAmount,
+          validUntil: session.validUntil,
+          status: session.status,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+
+  /**
    * 3. Meta / WhatsApp Cloud API Webhook Verification (GET)
    */
   router.get('/webhook/whatsapp', (req: Request, res: Response) => {

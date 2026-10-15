@@ -15,6 +15,7 @@ export function WhatsAppPairingCard() {
   const [copied, setCopied] = useState(false)
   const [sessionData, setSessionData] = useState<{
     paired: boolean
+    sessionId?: string
     phoneId?: string
     spendingLimit?: string
     spentAmount?: string
@@ -22,7 +23,34 @@ export function WhatsAppPairingCard() {
   } | null>(null)
   const [error, setError] = useState('')
 
-  // Poll pairing status if pairingToken is active
+  // 1. Session Persistence: Restore active session from Turso database on mount or wallet change
+  useEffect(() => {
+    if (!address) {
+      setSessionData(null)
+      return
+    }
+
+    let isMounted = true
+    const currentAddress = address
+    async function loadActiveSession() {
+      try {
+        const res = await fetch(`/api/chat-to-pay/session?address=${currentAddress.toLowerCase()}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (isMounted && data.found && data.session) {
+            setSessionData(data.session)
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load persistent session:', err)
+      }
+    }
+
+    loadActiveSession()
+    return () => { isMounted = false }
+  }, [address])
+
+  // 2. Poll pairing status if pairingToken is active
   useEffect(() => {
     if (!pairingToken || sessionData?.paired) return
 
@@ -43,6 +71,23 @@ export function WhatsAppPairingCard() {
 
     return () => clearInterval(interval)
   }, [pairingToken, sessionData?.paired])
+
+  async function handleDisconnect() {
+    if (!sessionData?.sessionId) {
+      setSessionData(null)
+      return
+    }
+    try {
+      await fetch(`/api/chat-to-pay/session?sessionId=${sessionData.sessionId}`, {
+        method: 'DELETE',
+      })
+      setSessionData(null)
+    } catch (e) {
+      console.warn('Disconnect error:', e)
+      setSessionData(null)
+    }
+  }
+
 
   async function handleStartPairing() {
     if (!address) return
@@ -176,6 +221,28 @@ export function WhatsAppPairingCard() {
               Always reply <strong>YES</strong> to execute payment on Arc Mainnet.
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            style={{
+              width: '100%',
+              marginTop: '12px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '10px',
+              color: 'var(--text-secondary)',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--red)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+          >
+            Disconnect WhatsApp Session
+          </button>
         </div>
       ) : pairingToken ? (
         <div style={{

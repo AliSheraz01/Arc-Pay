@@ -37,15 +37,14 @@ export class WhatsAppAIAgent {
     const trimmed = messageText.trim();
     const upper = trimmed.toUpperCase();
 
-    // 1. Handle Pairing Command: "PAIR <TOKEN>"
-    if (upper.startsWith('PAIR')) {
-      const parts = trimmed.split(/\s+/);
-      const token = parts[1]?.toUpperCase();
-      if (!token) {
-        return '⚠️ Please provide your pairing code. Example: *PAIR ARC-8492*';
-      }
+    // 1. Handle Pairing Command: "PAIR ARC-XXXX", "ARC-XXXX", "ARC - XXXX", etc.
+    const normalizedForPairing = upper.replace(/\s*-\s*/g, '-');
+    const pairingMatch = normalizedForPairing.match(/(?:PAIR\s+)?(ARC-[A-Z0-9]{4})/i);
+    if (pairingMatch) {
+      const token = pairingMatch[1].toUpperCase();
       return this.handlePairing(phoneId, token);
     }
+
 
     // 2. Look up active user session
     const session = await this.prisma.whatsAppSession.findFirst({

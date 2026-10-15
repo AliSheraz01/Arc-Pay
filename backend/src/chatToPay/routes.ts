@@ -4,7 +4,7 @@ import { WhatsAppAIAgent } from './aiAgent';
 import { generatePairingToken, encryptPrivateKey, normalizePhone } from './crypto';
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'easyzpay-arc-webhook-verify-token';
-const BOT_PHONE_NUMBER = process.env.WHATSAPP_BOT_NUMBER || '15551234567';
+const BOT_PHONE_NUMBER = process.env.WHATSAPP_BOT_NUMBER || '923497225236';
 
 // Green-API configuration (Free Developer plan)
 const GREEN_API_ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || '';

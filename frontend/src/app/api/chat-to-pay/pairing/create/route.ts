@@ -4,7 +4,7 @@ import { generatePairingToken, encryptPrivateKey } from '@/lib/chatToPay/crypto'
 
 export const dynamic = 'force-dynamic'
 
-const BOT_PHONE_NUMBER = process.env.WHATSAPP_BOT_NUMBER || '15551234567'
+const BOT_PHONE_NUMBER = process.env.WHATSAPP_BOT_NUMBER || '923497225236'
 
 export async function POST(request: NextRequest) {
   try {

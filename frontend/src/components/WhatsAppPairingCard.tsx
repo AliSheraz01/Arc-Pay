@@ -75,7 +75,10 @@ export function WhatsAppPairingCard() {
 
       const data = await res.json()
       setPairingToken(data.pairingToken)
-      setDeepLink(data.whatsappDeepLink)
+      const link = (data.whatsappDeepLink && !data.whatsappDeepLink.includes('15551234567'))
+        ? data.whatsappDeepLink
+        : `https://wa.me/923497225236?text=${encodeURIComponent(`PAIR ${data.pairingToken}`)}`
+      setDeepLink(link)
     } catch (err: any) {
       console.error('Pairing error:', err)
       setError(err.message || 'Failed to initiate pairing')
@@ -193,8 +196,11 @@ export function WhatsAppPairingCard() {
             }}>
               {pairingToken}
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Send this code to the Easyzpay WhatsApp Bot to link your wallet.
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 4px 0' }}>
+              Send this code to WhatsApp Bot: <strong style={{ color: '#25D366' }}>+92 349 7225236</strong>
+            </p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Click the button below or text directly from WhatsApp.
             </p>
           </div>
 

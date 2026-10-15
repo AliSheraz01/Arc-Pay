@@ -21,18 +21,21 @@ export function WhatsAppPairingCard() {
     spentAmount?: string
     validUntil?: string
   } | null>(null)
+  const [isCheckingSession, setIsCheckingSession] = useState(true)
   const [error, setError] = useState('')
 
   // 1. Session Persistence: Restore active session from Turso database on mount or wallet change
   useEffect(() => {
     if (!address) {
       setSessionData(null)
+      setIsCheckingSession(false)
       return
     }
 
     let isMounted = true
     const currentAddress = address
     async function loadActiveSession() {
+      setIsCheckingSession(true)
       try {
         const res = await fetch(`/api/chat-to-pay/session?address=${currentAddress.toLowerCase()}`)
         if (res.ok) {
@@ -43,12 +46,15 @@ export function WhatsAppPairingCard() {
         }
       } catch (err) {
         console.warn('Failed to load persistent session:', err)
+      } finally {
+        if (isMounted) setIsCheckingSession(false)
       }
     }
 
     loadActiveSession()
     return () => { isMounted = false }
   }, [address])
+
 
   // 2. Poll pairing status if pairingToken is active
   useEffect(() => {
@@ -183,7 +189,23 @@ export function WhatsAppPairingCard() {
         Send USDC instantly on Arc Chain using WhatsApp. Protected by delegated Session Keys, daily spending caps, and two-step verification.
       </p>
 
-      {sessionData?.paired ? (
+      {isCheckingSession && address ? (
+        <div style={{
+          background: 'var(--surface-raised)',
+          borderRadius: '16px',
+          padding: '24px',
+          textAlign: 'center',
+          color: 'var(--text-secondary)',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+        }}>
+          <MdAccessTime size={16} className="shimmer-rotate" />
+          <span>Syncing WhatsApp session status with Arc Network...</span>
+        </div>
+      ) : sessionData?.paired ? (
         <div style={{
           background: 'var(--surface-raised)',
           border: '1px solid rgba(37, 211, 102, 0.3)',

@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
       data: {
         pairingToken,
         pairingTokenExpiresAt,
-        smartAccountAddress,
-        ownerAddress,
+        smartAccountAddress: smartAccountAddress.toLowerCase(),
+        ownerAddress: ownerAddress.toLowerCase(),
         sessionPublicKey,
         sessionPrivateKeyEncrypted,
         spendingLimit: String(spendingLimit),

@@ -10,16 +10,19 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const address = searchParams.get('address')?.toLowerCase()
+    const address = searchParams.get('address')?.toLowerCase().trim()
 
     if (!address) {
       return NextResponse.json({ error: 'address parameter is required' }, { status: 400 })
     }
 
-    // Query non-volatile database for active paired session matching the owner address
-    const session = await db.whatsAppSession.findFirst({
+    // 1. Query non-volatile database for active paired session
+    let session = await db.whatsAppSession.findFirst({
       where: {
-        ownerAddress: { equals: address },
+        OR: [
+          { ownerAddress: address },
+          { smartAccountAddress: address },
+        ],
         status: 'PAIRED',
         validUntil: { gt: new Date() },
       },
@@ -36,9 +39,30 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // 2. Case-insensitive raw SQL fallback in case address was saved in mixed-case
+    if (!session) {
+      try {
+        const rawMatches: any = await db.$queryRawUnsafe(`
+          SELECT id, phoneId, pairingToken, spendingLimit, spentAmount, validUntil, status, createdAt
+          FROM WhatsAppSession
+          WHERE (LOWER(ownerAddress) = LOWER(?) OR LOWER(smartAccountAddress) = LOWER(?))
+            AND status = 'PAIRED'
+            AND validUntil > CURRENT_TIMESTAMP
+          ORDER BY createdAt DESC
+          LIMIT 1
+        `, address, address)
+        if (rawMatches && rawMatches.length > 0) {
+          session = rawMatches[0]
+        }
+      } catch (sqlErr) {
+        console.warn('[Session API] Raw SQL fallback note:', sqlErr)
+      }
+    }
+
     if (!session) {
       return NextResponse.json({ found: false })
     }
+
 
     return NextResponse.json({
       found: true,

@@ -200,6 +200,27 @@ export class WhatsAppAIAgent {
       return '⏳ *Pairing Token Expired:* Please generate a fresh pairing token on https://easyzpay.xyz.';
     }
 
+    // Clear previous sessions for this phone number and owner address to prevent UNIQUE constraint errors
+    await this.prisma.whatsAppSession.updateMany({
+      where: { phoneId },
+      data: {
+        status: 'REVOKED',
+        phoneId: null,
+      },
+    });
+
+    await this.prisma.whatsAppSession.updateMany({
+      where: {
+        ownerAddress: session.ownerAddress,
+        id: { not: session.id },
+        status: 'PAIRED',
+      },
+      data: {
+        status: 'REVOKED',
+        phoneId: null,
+      },
+    });
+
     // Securely bind the WhatsApp Phone ID with the authenticated session
     await this.prisma.whatsAppSession.update({
       where: { id: session.id },
@@ -208,6 +229,7 @@ export class WhatsAppAIAgent {
         status: 'PAIRED',
       },
     });
+
 
     const expiryFormatted = new Date(session.validUntil).toLocaleDateString('en-US', {
       month: 'short',

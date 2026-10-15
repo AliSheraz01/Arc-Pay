@@ -174,6 +174,28 @@ export class WhatsAppAIAgent {
       return '⏳ *Pairing Token Expired:* Please generate a fresh pairing token on https://easyzpay.xyz.'
     }
 
+    // Clear previous sessions for this phone number and owner address to prevent UNIQUE constraint errors
+    await db.whatsAppSession.updateMany({
+      where: { phoneId },
+      data: {
+        status: 'REVOKED',
+        phoneId: null,
+      },
+    })
+
+    await db.whatsAppSession.updateMany({
+      where: {
+        ownerAddress: session.ownerAddress,
+        id: { not: session.id },
+        status: 'PAIRED',
+      },
+      data: {
+        status: 'REVOKED',
+        phoneId: null,
+      },
+    })
+
+    // Bind the WhatsApp Phone ID to the newly authenticated session
     await db.whatsAppSession.update({
       where: { id: session.id },
       data: {
@@ -181,6 +203,7 @@ export class WhatsAppAIAgent {
         status: 'PAIRED',
       },
     })
+
 
     const expiryFormatted = new Date(session.validUntil).toLocaleDateString('en-US', {
       month: 'short',

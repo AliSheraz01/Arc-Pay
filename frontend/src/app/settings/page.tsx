@@ -8,6 +8,7 @@ import { REGISTRY_ADDRESS, ACTIVE_CHAIN, RPC_URL, EXPLORER_URL } from '@/lib/con
 import { REGISTRY_ABI } from '@/lib/abi'
 import Link from 'next/link'
 import { MdPerson, MdSecurity, MdCreditCard, MdAccessTime, MdCheckCircle } from 'react-icons/md'
+import { WhatsAppPairingCard } from '@/components/WhatsAppPairingCard'
 
 export default function SettingsPage() {
   const { address, isConnected } = useAccount()
@@ -189,6 +190,9 @@ export default function SettingsPage() {
               </>
             )}
           </div>
+
+          {/* WhatsApp Chat-to-Pay (Arc ERC-4337 Session Keys) */}
+          <WhatsAppPairingCard />
 
           {/* Wallet Info */}
           <div style={{

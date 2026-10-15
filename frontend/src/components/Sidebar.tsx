@@ -146,6 +146,7 @@ export function Sidebar() {
     { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
     { href: '/activity', label: 'History', icon: MdHistory },
     { href: '/profile', label: 'Profile', icon: MdPerson },
+    { href: '/settings', label: 'Settings', icon: MdSettings },
   ]
 
   return (

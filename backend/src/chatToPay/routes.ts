@@ -6,6 +6,34 @@ import { generatePairingToken, encryptPrivateKey, normalizePhone } from './crypt
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'easyzpay-arc-webhook-verify-token';
 const BOT_PHONE_NUMBER = process.env.WHATSAPP_BOT_NUMBER || '15551234567';
 
+// Green-API configuration (Free Developer plan)
+const GREEN_API_ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || '';
+const GREEN_API_TOKEN_INSTANCE = process.env.GREEN_API_TOKEN_INSTANCE || '';
+const GREEN_API_HOST = process.env.GREEN_API_HOST || 'https://api.green-api.com';
+
+async function sendGreenApiMessage(chatId: string, message: string) {
+  if (!GREEN_API_ID_INSTANCE || !GREEN_API_TOKEN_INSTANCE) {
+    console.warn('[Green-API] GREEN_API_ID_INSTANCE or GREEN_API_TOKEN_INSTANCE not set');
+    return;
+  }
+  const url = `${GREEN_API_HOST}/waInstance${GREEN_API_ID_INSTANCE}/sendMessage/${GREEN_API_TOKEN_INSTANCE}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[Green-API] Error sending message:', err);
+    } else {
+      console.log(`[Green-API] Message sent to ${chatId}`);
+    }
+  } catch (e) {
+    console.error('[Green-API] Network error:', e);
+  }
+}
+
 export function createChatToPayRouter(prisma: PrismaClient): Router {
   const router = Router();
   const agent = new WhatsAppAIAgent(prisma);
@@ -132,7 +160,7 @@ function escapeXml(unsafe: string): string {
 }
 
   /**
-   * 4. Incoming WhatsApp Message Webhook (POST) - Supports Twilio & Meta
+   * 4. Incoming WhatsApp Message Webhook (POST) - Supports Green-API, Twilio & Meta
    */
   router.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     try {
@@ -140,8 +168,19 @@ function escapeXml(unsafe: string): string {
       let senderPhone = '';
       let messageText = '';
       const isTwilio = Boolean(body.AccountSid || (body.From && String(body.From).startsWith('whatsapp:')));
+      const isGreenApi = Boolean(body.typeWebhook === 'incomingMessageReceived' || body.instanceData);
+      let greenApiChatId = '';
 
-      if (body.entry && body.entry[0]?.changes && body.entry[0]?.changes[0]?.value?.messages) {
+      if (isGreenApi && body.messageData) {
+        // Green-API format
+        greenApiChatId = body.senderData?.chatId || body.senderData?.sender || '';
+        senderPhone = normalizePhone(greenApiChatId.replace(/@.*$/, ''));
+        messageText = (
+          body.messageData?.textMessageData?.textMessage ||
+          body.messageData?.extendedTextMessageData?.text ||
+          ''
+        ).trim();
+      } else if (body.entry && body.entry[0]?.changes && body.entry[0]?.changes[0]?.value?.messages) {
         // Meta Cloud API format
         const msg = body.entry[0].changes[0].value.messages[0];
         senderPhone = normalizePhone(msg.from);
@@ -164,14 +203,21 @@ function escapeXml(unsafe: string): string {
         return res.status(200).json({ status: 'ignored_empty_message' });
       }
 
-      console.log(`[WhatsApp Webhook] (${isTwilio ? 'Twilio' : 'Meta'}) Message from ${senderPhone}: "${messageText}"`);
+      const providerTag = isGreenApi ? 'Green-API' : isTwilio ? 'Twilio' : 'Meta';
+      console.log(`[WhatsApp Webhook] (${providerTag}) Message from ${senderPhone}: "${messageText}"`);
 
       // AI Agent parses intent and handles two-step confirmation
       const replyMessage = await agent.handleIncomingMessage(senderPhone, messageText);
 
       console.log(`[WhatsApp Webhook] Replying to ${senderPhone}: "${replyMessage}"`);
 
-      // If request came from Twilio, respond with TwiML XML
+      // 1. If request came from Green-API, send reply via Green-API REST API
+      if (isGreenApi && greenApiChatId) {
+        await sendGreenApiMessage(greenApiChatId, replyMessage);
+        return res.status(200).json({ status: 'ok', to: greenApiChatId });
+      }
+
+      // 2. If request came from Twilio, respond with TwiML XML
       if (isTwilio) {
         res.setHeader('Content-Type', 'text/xml');
         return res.status(200).send(
@@ -179,7 +225,7 @@ function escapeXml(unsafe: string): string {
         );
       }
 
-      // Default JSON response (for Meta or simulator)
+      // 3. Default JSON response (for Meta or simulator)
       return res.json({
         success: true,
         to: senderPhone,

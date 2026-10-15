@@ -37,6 +37,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/api/chat-to-pay', createChatToPayRouter(prisma));
 
 // Environment & Network configuration — single source of truth

@@ -118,38 +118,68 @@ export function createChatToPayRouter(prisma: PrismaClient): Router {
     return res.status(403).send('Forbidden');
   });
 
+function escapeXml(unsafe: string): string {
+  return unsafe.replace(/[<>&'"]/g, (c) => {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
   /**
-   * 4. Incoming WhatsApp Message Webhook (POST)
+   * 4. Incoming WhatsApp Message Webhook (POST) - Supports Twilio & Meta
    */
   router.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     try {
-      // Support standard Meta Cloud API payload or simplified webhook payload
       const body = req.body;
       let senderPhone = '';
       let messageText = '';
+      const isTwilio = Boolean(body.AccountSid || (body.From && String(body.From).startsWith('whatsapp:')));
 
       if (body.entry && body.entry[0]?.changes && body.entry[0]?.changes[0]?.value?.messages) {
+        // Meta Cloud API format
         const msg = body.entry[0].changes[0].value.messages[0];
         senderPhone = normalizePhone(msg.from);
         messageText = msg.text?.body || '';
+      } else if (body.From && (body.Body !== undefined)) {
+        // Twilio WhatsApp format: From="whatsapp:+1234567890", Body="Pay 5 USDC..."
+        senderPhone = normalizePhone(String(body.From).replace('whatsapp:', ''));
+        messageText = String(body.Body || '').trim();
       } else if (body.from && body.text) {
-        // Direct / Twilio format
+        // Generic JSON payload
         senderPhone = normalizePhone(body.from);
         messageText = body.text;
       }
 
       if (!senderPhone || !messageText) {
+        if (isTwilio) {
+          res.setHeader('Content-Type', 'text/xml');
+          return res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+        }
         return res.status(200).json({ status: 'ignored_empty_message' });
       }
 
-      console.log(`[WhatsApp Webhook] Message from ${senderPhone}: "${messageText}"`);
+      console.log(`[WhatsApp Webhook] (${isTwilio ? 'Twilio' : 'Meta'}) Message from ${senderPhone}: "${messageText}"`);
 
       // AI Agent parses intent and handles two-step confirmation
       const replyMessage = await agent.handleIncomingMessage(senderPhone, messageText);
 
       console.log(`[WhatsApp Webhook] Replying to ${senderPhone}: "${replyMessage}"`);
 
-      // Respond directly in HTTP response or call WhatsApp Cloud API
+      // If request came from Twilio, respond with TwiML XML
+      if (isTwilio) {
+        res.setHeader('Content-Type', 'text/xml');
+        return res.status(200).send(
+          `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Message>${escapeXml(replyMessage)}</Message>\n</Response>`
+        );
+      }
+
+      // Default JSON response (for Meta or simulator)
       return res.json({
         success: true,
         to: senderPhone,

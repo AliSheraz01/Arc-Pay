@@ -39,19 +39,28 @@ export async function POST(request: NextRequest) {
 
     if (isGreenApi && body.messageData) {
       greenApiChatId = body.senderData?.chatId || body.senderData?.sender || ''
+      // Ignore group chats (@g.us) to prevent spam or unintentional triggers
+      if (greenApiChatId.endsWith('@g.us')) {
+        return NextResponse.json({ status: 'ignored_group_message' })
+      }
+
       senderPhone = normalizePhone(greenApiChatId.replace(/@.*$/, ''))
       messageText = (
         body.messageData?.textMessageData?.textMessage ||
         body.messageData?.extendedTextMessageData?.text ||
+        body.messageData?.buttonsResponseMessageData?.selectedDisplayText ||
+        body.messageData?.buttonsResponseMessageData?.selectedButtonId ||
+        body.messageData?.listResponseMessageData?.title ||
+        body.messageData?.listResponseMessageData?.selectedRowId ||
         ''
       ).trim()
     } else if (body.entry && body.entry[0]?.changes && body.entry[0]?.changes[0]?.value?.messages) {
       const msg = body.entry[0].changes[0].value.messages[0]
       senderPhone = normalizePhone(msg.from)
-      messageText = msg.text?.body || ''
+      messageText = (msg.text?.body || msg.interactive?.button_reply?.title || '').trim()
     } else if (body.from && body.text) {
       senderPhone = normalizePhone(body.from)
-      messageText = body.text
+      messageText = String(body.text).trim()
     }
 
     if (!senderPhone || !messageText) {
@@ -78,6 +87,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (err: any) {
     console.error('[Next.js WhatsApp Webhook] Error:', err)
-    return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 })
+    // Always return HTTP 200 with status error so Green-API doesn't queue and retry failed requests indefinitely
+    return NextResponse.json({ status: 'handled_with_error', error: err.message || 'Internal error' })
   }
 }

@@ -30,11 +30,27 @@ export class WhatsAppAIAgent {
       where: { phoneId, status: 'PAIRED' },
     })
 
+    // Greetings check regex
+    const isGreeting = /^(HI+|HELLO+|HEY+|AOA|SALA+M|ASSALAM\s*O\s*ALAIKUM|ASSALAMU\s*ALAIKUM|SUP|YO|GOOD\s*MORNING|GOOD\s*EVENING|GOOD\s*AFTERNOON|HOLA|HELP)\b/i.test(trimmed) ||
+      ['HI', 'HELLO', 'HEY', 'AOA', 'SALAM', 'SALAAM', 'HELP', 'ASSALAM O ALAIKUM', 'ASSALAMU ALAIKUM', 'SUP', 'YO'].includes(upper)
+
     if (!session) {
+      if (isGreeting || ['PANEL', '/PANEL', 'MENU', '/MENU'].includes(upper)) {
+        return (
+          `Hey! 👋 Welcome to Easyzpay on Arc Chain! ⚡\n\n` +
+          `I'm your personal WhatsApp payment assistant. You can send instant USDC right from chat!\n\n` +
+          `*To connect in seconds:*\n` +
+          `1️⃣ Visit https://easyzpay.xyz\n` +
+          `2️⃣ Go to the *Chat to Pay* tab\n` +
+          `3️⃣ Text me your pairing code (e.g. *PAIR ARC-XXXX*)\n\n` +
+          `Let me know once you're ready! 💬`
+        )
+      }
+
       return (
         '👋 *Welcome to Easyzpay Chat-to-Pay on Arc Chain!*\n\n' +
         'Your WhatsApp is not yet paired with an Easyzpay Smart Account.\n\n' +
-        '👉 Please visit https://easyzpay.xyz, click *"Connect WhatsApp"*, and send: *PAIR <CODE>*\n' +
+        '👉 Please visit https://easyzpay.xyz, click *"Chat to Pay"*, and send: *PAIR <CODE>*\n' +
         'Example: *PAIR ARC-8492*'
       )
     }
@@ -48,7 +64,7 @@ export class WhatsAppAIAgent {
       return (
         '⏳ *Session Expired:*\n' +
         'Your delegated Chat-to-Pay session has reached its expiry limit.\n' +
-        'Please renew your session on https://easyzpay.xyz to continue sending payments.'
+        'Please renew your session on https://easyzpay.xyz (Chat to Pay tab) to continue sending payments.'
       )
     }
 
@@ -93,6 +109,72 @@ export class WhatsAppAIAgent {
           `Your payment of ${pendingIntent.amount} USDC to ${pendingIntent.recipientInput} was cancelled. No funds were transferred.`
         )
       }
+    }
+
+    // 4. Greetings Handler (Friendly & Warm)
+    if (isGreeting && !['1', '2', '3'].includes(upper)) {
+      const remaining = Math.max(0, parseFloat(session.spendingLimit) - parseFloat(session.spentAmount || '0')).toFixed(2)
+      return (
+        `Hey there! 👋 Great to see you!\n\n` +
+        `Your Easyzpay wallet is active and ready to send instant payments on Arc Chain. 🚀\n\n` +
+        `*Quick Actions:*\n` +
+        `💸 *Send Payment:* Just text:\n` +
+        `• \`Pay 5 USDC to @username\`\n` +
+        `• \`Send 1 to 0x742d...44e\`\n\n` +
+        `🎛️ *Control Menu:*\n` +
+        `Type */panel* to view your transaction history or manage your session.\n\n` +
+        `Remaining allowance: *${remaining} USDC* 🛡️`
+      )
+    }
+
+    // 5. /panel Command (or panel, /menu, menu)
+    if (['/PANEL', 'PANEL', '/MENU', 'MENU'].includes(upper)) {
+      const spent = parseFloat(session.spentAmount || '0').toFixed(2)
+      const limit = parseFloat(session.spendingLimit).toFixed(2)
+      const remaining = Math.max(0, parseFloat(session.spendingLimit) - parseFloat(session.spentAmount || '0')).toFixed(2)
+      const shortAddr = `${session.ownerAddress.slice(0, 6)}...${session.ownerAddress.slice(-4)}`
+
+      return (
+        `🎛️ *Easyzpay Control Panel*\n\n` +
+        `👤 *Account:* \`${shortAddr}\`\n` +
+        `💰 *Daily Cap:* ${limit} USDC\n` +
+        `📊 *Spent:* ${spent} USDC (Remaining: *${remaining} USDC*)\n` +
+        `🟢 *Status:* Active & Protected on Arc Mainnet\n\n` +
+        `*Reply with a number or command:*\n` +
+        `1️⃣ *1* or */history* - Transaction History 📜\n` +
+        `2️⃣ *2* or */disconnect* - Disconnect WhatsApp Session 🔌\n` +
+        `3️⃣ *3* or */help* - Payment Guide & Examples 💡\n\n` +
+        `💡 Or simply text a payment anytime:\n` +
+        `👉 \`Pay 1 USDC to @username\``
+      )
+    }
+
+    // 6. Option 1: Transaction History (1, /history, history, tx, transactions)
+    if (['1', '/HISTORY', 'HISTORY', '/TX', 'TX', 'TRANSACTIONS'].includes(upper)) {
+      return this.handleHistory(session)
+    }
+
+    // 7. Option 2: Disconnect Session (2, /disconnect, disconnect, unlink, logout)
+    if (['2', '/DISCONNECT', 'DISCONNECT', 'UNLINK', 'LOGOUT', '/LOGOUT'].includes(upper)) {
+      return this.handleDisconnect(session.phoneId || phoneId)
+    }
+
+    // 8. Option 3 / Help (3, /help, help)
+    if (['3', '/HELP'].includes(upper)) {
+      return (
+        `💡 *Easyzpay Chat-to-Pay Guide*\n\n` +
+        `Send USDC instantly with natural commands:\n\n` +
+        `• *By Username:*\n` +
+        `  \`Pay 5 USDC to @alisheraz\`\n` +
+        `  \`Send 10 to @alex\`\n\n` +
+        `• *By Wallet Address:*\n` +
+        `  \`Pay 2 USDC to 0x742d35Cc6634C0532925a3b844Bc454e4438f44e\`\n\n` +
+        `• *Control Commands:*\n` +
+        `  \`/panel\` - Open Control Panel\n` +
+        `  \`/history\` - View recent payments\n` +
+        `  \`/disconnect\` - Revoke session\n\n` +
+        `Every transfer requires your explicit *YES* confirmation before broadcasting to Arc Mainnet.`
+      )
     }
 
     // 4. Intent Extraction
@@ -249,11 +331,12 @@ export class WhatsAppAIAgent {
       return {
         success: false,
         errorResponse:
-          `❓ *Could not understand payment request.*\n\n` +
-          `Please use one of the following formats:\n` +
-          `• *Pay 5 USDC to @username*\n` +
-          `• *Send 10 to 0x1234...abcd*\n` +
-          `• *Transfer $2.5 to @alisheraz*`,
+          `Hey! I couldn't quite catch that payment command. 😊\n\n` +
+          `*Here is how to send USDC:*\n` +
+          `• \`Pay 5 USDC to @username\`\n` +
+          `• \`Send 10 to 0x742d...44e\`\n` +
+          `• \`Transfer 2.5 to @alisheraz\`\n\n` +
+          `💡 Reply with */panel* anytime to view your account menu or transaction history!`,
       }
     }
 
@@ -338,6 +421,118 @@ export class WhatsAppAIAgent {
         success: false,
         errorResponse: `❌ *Registry Resolution Error:* Could not resolve @${cleanUsername}. Please try again later.`,
       }
+    }
+  }
+
+  /**
+   * Option 1: Transaction History queried directly from Turso database
+   */
+  async handleHistory(session: any): Promise<string> {
+    try {
+      // 1. Check ChatPaymentIntent executed rows for this session or phone
+      const intents = await db.chatPaymentIntent.findMany({
+        where: {
+          sessionId: session.id,
+          status: 'EXECUTED',
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+
+      if (intents && intents.length > 0) {
+        let historyText = `📜 *Recent Transactions (Arc Mainnet)*\n\n`
+        intents.forEach((intent, idx) => {
+          const dateStr = new Date(intent.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })
+          historyText += `${idx + 1}. 💸 *${intent.amount} USDC* ➔ ${intent.recipientInput}\n`
+          historyText += `   Status: Confirmed ✅ (${dateStr})\n`
+          if (intent.txHash) {
+            historyText += `   Tx: https://explorer.arc.io/tx/${intent.txHash}\n`
+          }
+          historyText += `\n`
+        })
+
+        const remaining = Math.max(0, parseFloat(session.spendingLimit) - parseFloat(session.spentAmount || '0')).toFixed(2)
+        historyText += `💳 *Remaining Allowance:* ${remaining} USDC`
+        return historyText
+      }
+
+      // 2. Fallback check db.transaction for recorded on-chain transfers
+      const userAddr = (session.ownerAddress || session.smartAccountAddress).toLowerCase()
+      const txs = await db.transaction.findMany({
+        where: {
+          OR: [
+            { fromAddress: userAddr },
+            { toAddress: userAddr },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      })
+
+      if (txs && txs.length > 0) {
+        let historyText = `📜 *Recent Transactions (Arc Mainnet)*\n\n`
+        txs.forEach((tx, idx) => {
+          const isSent = tx.fromAddress.toLowerCase() === userAddr
+          const dateStr = new Date(tx.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })
+          const counterparty = tx.recipientUsername
+            ? `@${tx.recipientUsername}`
+            : isSent
+            ? `${tx.toAddress.slice(0, 6)}...${tx.toAddress.slice(-4)}`
+            : `${tx.fromAddress.slice(0, 6)}...${tx.fromAddress.slice(-4)}`
+
+          historyText += `${idx + 1}. ${isSent ? '💸 Sent' : '📥 Received'} *${tx.amount} USDC* ${isSent ? '➔' : 'from'} ${counterparty}\n`
+          historyText += `   Status: Confirmed ✅ (${dateStr})\n`
+          if (tx.txHash) {
+            historyText += `   Tx: https://explorer.arc.io/tx/${tx.txHash}\n`
+          }
+          historyText += `\n`
+        })
+
+        const remaining = Math.max(0, parseFloat(session.spendingLimit) - parseFloat(session.spentAmount || '0')).toFixed(2)
+        historyText += `💳 *Remaining Allowance:* ${remaining} USDC`
+        return historyText
+      }
+
+      return (
+        `📜 *Recent Transactions (Arc Mainnet)*\n\n` +
+        `No transactions recorded yet!\n\n` +
+        `👉 Send your first payment by texting:\n` +
+        `\`Pay 1 USDC to @username\``
+      )
+    } catch (err: any) {
+      console.error('[AI Agent] History error:', err)
+      return `❌ *Could not retrieve history:* ${err.message || 'Database error'}. Please try again later.`
+    }
+  }
+
+  /**
+   * Option 2: Disconnect WhatsApp Session and revoke active session keys in Turso
+   */
+  async handleDisconnect(phoneId: string): Promise<string> {
+    try {
+      await db.whatsAppSession.updateMany({
+        where: { phoneId, status: 'PAIRED' },
+        data: {
+          status: 'REVOKED',
+          phoneId: null,
+        },
+      })
+
+      return (
+        `🔌 *Session Disconnected Successfully*\n\n` +
+        `Your WhatsApp has been unlinked from Easyzpay. Your delegated session keys have been revoked and no further payments can be broadcasted from this chat.\n\n` +
+        `To reconnect anytime, visit https://easyzpay.xyz -> *Chat to Pay* tab and generate a new pairing code.\n\n` +
+        `Have a wonderful day! 👋`
+      )
+    } catch (err: any) {
+      console.error('[AI Agent] Disconnect error:', err)
+      return `❌ *Disconnect Failed:* ${err.message || 'Database error'}. Please try again later.`
     }
   }
 }

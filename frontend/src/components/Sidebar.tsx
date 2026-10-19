@@ -17,7 +17,8 @@ import {
   MdAutoAwesome,
   MdSwapHoriz,
   MdClose,
-  MdCheck
+  MdCheck,
+  MdChat
 } from 'react-icons/md'
 
 const SUPPORTED_NETWORKS = [
@@ -143,6 +144,7 @@ export function Sidebar() {
     { href: '/send', label: 'Send', icon: MdSend },
     { href: '/receive', label: 'Receive', icon: MdCallReceived },
     { href: '/cross-pay', label: 'Cross Pay', icon: MdLink },
+    { href: '/chat-to-pay', label: 'Chat to Pay', icon: MdChat },
     { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
     { href: '/activity', label: 'History', icon: MdHistory },
     { href: '/profile', label: 'Profile', icon: MdPerson },

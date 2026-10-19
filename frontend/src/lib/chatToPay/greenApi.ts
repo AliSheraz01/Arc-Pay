@@ -24,7 +24,11 @@ export async function sendGreenApiMessage(chatId: string, message: string): Prom
 
     if (!res.ok) {
       const err = await res.text()
-      console.error('[Green-API] Error sending message:', err)
+      if (err.includes('CORRESPONDENTS_QUOTE_EXCEEDED') || err.includes('quota has been exceeded')) {
+        console.warn('[Green-API QUOTA EXCEEDED] Free Developer plan reached the 3-number limit. Upgrade instance to Business on https://console.green-api.com to reply to everyone.')
+      } else {
+        console.error('[Green-API] Error sending message:', err)
+      }
       return false
     }
 

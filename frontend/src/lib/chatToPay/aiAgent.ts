@@ -468,7 +468,7 @@ export class WhatsAppAIAgent {
             { toAddress: userAddr },
           ],
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { timestamp: 'desc' },
         take: 5,
       })
 
@@ -476,7 +476,7 @@ export class WhatsAppAIAgent {
         let historyText = `📜 *Recent Transactions (Arc Mainnet)*\n\n`
         txs.forEach((tx, idx) => {
           const isSent = tx.fromAddress.toLowerCase() === userAddr
-          const dateStr = new Date(tx.createdAt).toLocaleDateString('en-US', {
+          const dateStr = new Date(tx.timestamp).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
           })

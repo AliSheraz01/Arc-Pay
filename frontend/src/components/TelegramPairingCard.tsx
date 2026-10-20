@@ -139,7 +139,7 @@ export function TelegramPairingCard() {
 
   function handleCopy() {
     if (!pairingToken) return
-    navigator.clipboard.writeText(pairingToken)
+    navigator.clipboard.writeText('PAIR ' + pairingToken)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -329,7 +329,10 @@ export function TelegramPairingCard() {
               {pairingToken}
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 4px 0' }}>
-              Tap below to connect instantly on Telegram:
+              Send this code to Telegram Bot: <strong style={{ color: '#229ED9' }}>@{botUsername}</strong>
+            </p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+              Send <code>PAIR {pairingToken}</code> directly or tap the 1-Tap button below:
             </p>
           </div>
 

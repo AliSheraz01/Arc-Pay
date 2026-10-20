@@ -557,7 +557,7 @@ export default function DashboardPage() {
                   <QuickActionRow href="/send" icon={MdSend} label="Send Money" />
                   <QuickActionRow href="/receive" icon={MdQrCode} label="Receive / QR Code" />
                   <QuickActionRow href="/cross-pay" icon={MdSwapHoriz} label="Cross Pay (Bridge & Pay)" />
-                  <QuickActionRow href="/chat-to-pay" icon={MdChat} label="Chat to Pay (WhatsApp AI)" />
+                  <QuickActionRow href="/chat-to-pay" icon={MdChat} label="Chat to Pay (Telegram AI)" />
                   <QuickActionRow href="/bounties" icon={MdEmojiEvents} label="Explore Bounties" />
                 </div>
               </div>
@@ -574,27 +574,27 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{
                       width: '32px', height: '32px', borderRadius: '10px',
-                      background: 'rgba(37, 211, 102, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#25D366'
+                      background: 'rgba(0, 136, 204, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#0088cc'
                     }}>
                       <MdChat size={18} />
                     </div>
                     <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', margin: 0 }}>Chat to Pay</h3>
                   </div>
                   <span style={{
-                    fontSize: '11px', fontWeight: 800, color: '#25D366',
-                    background: 'rgba(37, 211, 102, 0.12)', padding: '4px 10px', borderRadius: '12px'
+                    fontSize: '11px', fontWeight: 800, color: '#0088cc',
+                    background: 'rgba(0, 136, 204, 0.12)', padding: '4px 10px', borderRadius: '12px'
                   }}>
-                    WhatsApp Bot
+                    Telegram Bot
                   </span>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '12.5px', lineHeight: 1.5, marginBottom: '16px' }}>
-                  Send USDC gaslessly to usernames or wallet addresses straight from WhatsApp using delegated Session Keys.
+                  Send USDC gaslessly to usernames or wallet addresses straight from Telegram using delegated Session Keys.
                 </p>
                 <Link href="/chat-to-pay" style={{ textDecoration: 'none' }}>
                   <div style={{
                     width: '100%',
-                    background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                    background: 'linear-gradient(135deg, #0088cc, #0070a8)',
                     color: 'white',
                     borderRadius: '14px',
                     padding: '12px 16px',
@@ -604,10 +604,10 @@ export default function DashboardPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    boxShadow: '0 4px 14px rgba(37, 211, 102, 0.25)',
+                    boxShadow: '0 4px 14px rgba(0, 136, 204, 0.25)',
                     boxSizing: 'border-box'
                   }}>
-                    <span>Open Chat to Pay Panel</span>
+                    <span>Open Telegram Pay Panel</span>
                     <MdChevronRight size={18} />
                   </div>
                 </Link>

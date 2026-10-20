@@ -44,12 +44,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const BOT_TELEGRAM_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || process.env.TELEGRAM_BOT_USERNAME || 'EasyzpayBot'
+    const telegramDeepLink = `https://t.me/${BOT_TELEGRAM_USERNAME.replace(/^@/, '')}?start=${pairingToken}`
     const whatsappDeepLink = `https://wa.me/${BOT_PHONE_NUMBER}?text=${encodeURIComponent(`PAIR ${pairingToken}`)}`
 
     return NextResponse.json({
       success: true,
       pairingToken,
       expiresAt: pairingTokenExpiresAt.toISOString(),
+      telegramDeepLink,
       whatsappDeepLink,
       sessionId: session.id,
     })

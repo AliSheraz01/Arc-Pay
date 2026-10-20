@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic'
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'easyzpay_arc_webhook_secure_2026'
 
+// WhatsApp integration is paused while switching to Telegram. Set ENABLE_WHATSAPP=true to reactivate.
+const IS_WHATSAPP_ENABLED = process.env.ENABLE_WHATSAPP === 'true'
+
 /**
  * Webhook Verification (GET)
  */
@@ -26,6 +29,13 @@ export async function GET(request: NextRequest) {
  * Incoming Webhook (POST) - Green-API, Meta, Twilio
  */
 export async function POST(request: NextRequest) {
+  if (!IS_WHATSAPP_ENABLED) {
+    return NextResponse.json({
+      status: 'disabled',
+      message: 'WhatsApp functions are currently paused. Please use Telegram Chat-to-Pay (/api/chat-to-pay/webhook/telegram).',
+    })
+  }
+
   try {
     const body = await request.json().catch(() => ({}))
     const agent = new WhatsAppAIAgent()

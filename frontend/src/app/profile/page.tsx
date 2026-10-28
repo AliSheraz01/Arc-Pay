@@ -128,6 +128,27 @@ export default function ProfilePage() {
     }
   }, [address, fetchXStatus])
 
+  const handleConnectXOAuth = async () => {
+    if (!address) return
+    setXConnecting(true)
+    setXError('')
+    try {
+      const res = await fetch(`/api/social/x/auth?address=${address}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.url) {
+          window.location.href = data.url
+          return
+        }
+      }
+      setXError('Failed to initiate 𝕏 authorization.')
+    } catch (e: any) {
+      setXError(e.message || 'Authorization error')
+    } finally {
+      setXConnecting(false)
+    }
+  }
+
   const handleConnectX = async () => {
     if (!address) return
     setXConnecting(true)
@@ -161,14 +182,8 @@ export default function ProfilePage() {
         }
       }
 
-      const res = await fetch(`${BACKEND_URL}/api/social/x/auth?address=${address}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.url) {
-          window.location.href = data.url
-          return
-        }
-      }
+      await handleConnectXOAuth()
+      return
     } catch {}
 
     if (handle) {
@@ -556,6 +571,52 @@ export default function ProfilePage() {
                       Links your immutable X identity to this EasyZPay wallet.
                     </p>
                   </div>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                    Sign in with official 𝕏 OAuth 2.0 to securely link your Twitter identity to this Arc wallet. Tips and bounties mentioned to your @handle will automatically settle into this account.
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={xConnecting}
+                    onClick={handleConnectXOAuth}
+                    style={{
+                      width: '100%',
+                      background: '#000',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '14px',
+                      padding: '14px 16px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      cursor: xConnecting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                    }}
+                  >
+                    <span style={{ fontSize: '16px', fontWeight: 900 }}>𝕏</span>
+                    <span>{xConnecting ? 'Redirecting to 𝕏...' : 'Authorize with 𝕏 (Official OAuth 2.0)'}</span>
+                  </button>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  margin: '16px 0',
+                  color: 'var(--text-muted)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                }}>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+                  <span>Or enter handle manually</span>
+                  <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>

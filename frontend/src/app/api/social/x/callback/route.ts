@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { socialAccountsStore } from '@/app/api/resolve/[identifier]/route'
+import { db } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,6 +77,39 @@ export async function GET(request: NextRequest) {
       avatar,
       address: address.toLowerCase(),
     })
+
+    // Persist permanently into Turso Database
+    try {
+      const dbUser = await db.user.upsert({
+        where: { address: address.toLowerCase() },
+        update: {},
+        create: { address: address.toLowerCase() },
+      })
+
+      await db.socialAccount.upsert({
+        where: {
+          provider_providerUserId: {
+            provider: 'x',
+            providerUserId,
+          },
+        },
+        update: {
+          username: username.toLowerCase(),
+          displayName,
+          avatar,
+        },
+        create: {
+          userId: dbUser.id,
+          provider: 'x',
+          providerUserId,
+          username: username.toLowerCase(),
+          displayName,
+          avatar,
+        },
+      })
+    } catch (dbErr) {
+      console.warn('[X Callback DB] Failed to persist social account:', dbErr)
+    }
 
     return NextResponse.redirect(`${baseUrl}/profile?x_connected=true&username=${username}`)
   } catch (error) {

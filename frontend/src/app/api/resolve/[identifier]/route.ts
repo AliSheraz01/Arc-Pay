@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http, isAddress } from 'viem'
 import { ACTIVE_CHAIN, REGISTRY_ADDRESS, IS_PRODUCTION } from '@/lib/constants'
 import { REGISTRY_ABI } from '@/lib/abi'
+import { db } from '@/lib/db'
 
 // In-memory store for connected social accounts in serverless runtime
 export const socialAccountsStore: Map<string, {
@@ -63,6 +64,20 @@ export async function GET(
         }
       }
 
+      if (!response.xUsername) {
+        try {
+          const dbAcc = await db.socialAccount.findFirst({
+            where: { provider: 'x', user: { address: addr } },
+          })
+          if (dbAcc) {
+            response.xUserId = dbAcc.providerUserId
+            response.xUsername = dbAcc.username
+            response.displayName = dbAcc.displayName || `@${dbAcc.username}`
+            response.avatar = dbAcc.avatar
+          }
+        } catch {}
+      }
+
       // Try on-chain registry to get username
       try {
         const client = createPublicClient({
@@ -88,13 +103,32 @@ export async function GET(
     if (isX) {
       response.type = 'x'
       const lower = clean.toLowerCase()
-      let foundAcc = null
+      let foundAcc: any = null
 
       for (const acc of socialAccountsStore.values()) {
         if (acc.username.toLowerCase() === lower) {
           foundAcc = acc
           break
         }
+      }
+
+      if (!foundAcc) {
+        try {
+          const dbAcc = await db.socialAccount.findFirst({
+            where: { provider: 'x', username: lower },
+            include: { user: true },
+          })
+          if (dbAcc && dbAcc.user) {
+            foundAcc = {
+              userId: dbAcc.userId,
+              address: dbAcc.user.address,
+              providerUserId: dbAcc.providerUserId,
+              username: dbAcc.username,
+              displayName: dbAcc.displayName || `@${dbAcc.username}`,
+              avatar: dbAcc.avatar,
+            }
+          }
+        } catch {}
       }
 
       if (foundAcc) {

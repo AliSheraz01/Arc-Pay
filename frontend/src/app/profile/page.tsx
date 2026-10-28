@@ -88,7 +88,7 @@ export default function ProfilePage() {
     } catch {}
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/social/x/status/${addr}`)
+      const res = await fetch(`/api/social/x/status/${addr}`)
       if (res.ok) {
         const data = await res.json()
         if (data.connected && data.account) {
@@ -116,7 +116,7 @@ export default function ProfilePage() {
     if (address) {
       fetchXStatus(address)
       // Check backend user profile
-      fetch(`${BACKEND_URL}/api/users/${address}`)
+      fetch(`/api/users/${address}`)
         .then(r => r.ok ? r.json() : null)
         .then(u => {
           if (u?.username) {
@@ -158,7 +158,7 @@ export default function ProfilePage() {
 
     try {
       if (handle) {
-        const res = await fetch(`${BACKEND_URL}/api/social/x/connect`, {
+        const res = await fetch(`/api/social/x/connect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -205,7 +205,7 @@ export default function ProfilePage() {
   const handleDisconnectX = async () => {
     if (!address) return
     try {
-      await fetch(`${BACKEND_URL}/api/social/x/disconnect`, {
+      await fetch(`/api/social/x/disconnect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address }),

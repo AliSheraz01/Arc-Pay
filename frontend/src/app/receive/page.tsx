@@ -57,7 +57,7 @@ function ReceiveForm() {
   // Fetch connected X account on mount
   useEffect(() => {
     if (address) {
-      fetch(`${BACKEND_URL}/api/social/x/status/${address}`)
+      fetch(`/api/social/x/status/${address}`)
         .then(res => res.json())
         .then(data => {
           if (data.connected && data.account?.username) {

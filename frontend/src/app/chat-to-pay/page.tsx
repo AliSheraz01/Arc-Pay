@@ -171,17 +171,17 @@ function ChatToPayContent() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <CommandRow
-                  command="@EasyPayBot tip 5 USDC to @username"
-                  description="Sends 5 USDC tip directly to any user on 𝕏 with sub-second Arc confirmation."
+                  command="@easyzpay tip 0.07 USDC to @username"
+                  description="Sends native USDC tip directly to any user on 𝕏 with sub-second Arc confirmation."
                   tag="MICRO-TIP"
                 />
                 <CommandRow
-                  command="@EasyPayBot pay 10 to @bob"
+                  command="@easyzpay pay 10 to @bob"
                   description="Direct peer-to-peer payment settled instantly via your funded Agent Wallet."
                   tag="P2P PAY"
                 />
                 <CommandRow
-                  command="@EasyPayBot bounty 25 USDC for @coder"
+                  command="@easyzpay bounty 25 USDC for @coder"
                   description="Distributes task or bounty reward to builder on Arc Network."
                   tag="BOUNTY"
                 />

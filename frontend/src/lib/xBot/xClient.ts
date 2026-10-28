@@ -56,6 +56,8 @@ export class XApiClient {
       const queryParams: any = {
         max_results: 10,
         'tweet.fields': ['created_at', 'author_id', 'conversation_id'],
+        expansions: ['author_id'],
+        'user.fields': ['username', 'name'],
       }
 
       if (sinceId) {
@@ -67,10 +69,18 @@ export class XApiClient {
         return []
       }
 
+      const userMap = new Map<string, string>()
+      if (res.data.includes && (res.data.includes as any).users) {
+        for (const u of (res.data.includes as any).users) {
+          userMap.set(u.id, u.username)
+        }
+      }
+
       return res.data.data.map(t => ({
         id: t.id,
         text: t.text,
         authorId: t.author_id,
+        authorUsername: t.author_id ? userMap.get(t.author_id) : undefined,
         createdAt: t.created_at,
         conversationId: t.conversation_id,
       }))

@@ -5,6 +5,8 @@ export interface ParsedXIntent {
   grossAmount: number
   recipientUsername: string
   memo?: string
+  isValidAmount?: boolean
+  validationError?: string
 }
 
 export interface XPaymentResult {

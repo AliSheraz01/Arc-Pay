@@ -151,10 +151,31 @@ export class XBotWorker {
             continue
           }
 
-          // Parse intent (e.g. "@EasyPayBot tip 5 USDC to @alisheraz")
+          // Parse intent (e.g. "@easyzpay tip 0.07 USDC to @alisheraz")
           const intent = parseXPaymentIntent(mention.text)
           if (!intent) {
-            // Mention did not contain a valid payment command, ignore safely
+            // Mention did not contain a recognizable payment command, ignore safely
+            continue
+          }
+
+          if (intent.isValidAmount === false) {
+            await this.xClient.reply(
+              mention.id,
+              `⚠️ ${intent.validationError || 'Invalid payment amount specified.'}`
+            )
+            continue
+          }
+
+          // Self-transfer / Bot-transfer guard
+          const botHandle = 'easyzpay'
+          const authorUser = mention.authorUsername?.toLowerCase()
+          const recipientUser = intent.recipientUsername.toLowerCase()
+
+          if (recipientUser === botHandle || (authorUser && recipientUser === authorUser)) {
+            await this.xClient.reply(
+              mention.id,
+              `⚠️ Self-transfers and bot tips are not permitted. Please mention another user to send USDC (e.g. "@easyzpay tip ${intent.grossAmount} USDC to @friend").`
+            )
             continue
           }
 

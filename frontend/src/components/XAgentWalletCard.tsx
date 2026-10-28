@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useSendTransaction, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, formatUnits } from 'viem'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { parseUnits } from 'viem'
+import { USDC_ADDRESS } from '@/lib/constants'
+import { USDC_ABI } from '@/lib/abi'
 import { 
   MdSecurity, 
   MdContentCopy, 
@@ -33,7 +35,8 @@ export function XAgentWalletCard() {
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawSuccess, setWithdrawSuccess] = useState('')
 
-  const { sendTransactionAsync, data: depositTxHash, isPending: isDepositing } = useSendTransaction()
+  const { writeContractAsync, isPending: isDepositing } = useWriteContract()
+  const [depositTxHash, setDepositTxHash] = useState<`0x${string}` | undefined>()
   const { isLoading: isWaitingDeposit, isSuccess: depositSuccess } = useWaitForTransactionReceipt({
     hash: depositTxHash,
   })
@@ -56,24 +59,30 @@ export function XAgentWalletCard() {
 
   useEffect(() => {
     fetchAgentData()
+    const interval = setInterval(fetchAgentData, 6000)
+    return () => clearInterval(interval)
   }, [address])
 
   useEffect(() => {
     if (depositSuccess) {
       fetchAgentData()
       setShowDepositModal(false)
+      setDepositTxHash(undefined)
     }
   }, [depositSuccess])
 
-  // Deposit funds from Main Wallet to Agent Wallet
+  // Deposit funds from Main Wallet to Agent Wallet via canonical ERC-20 transfer
   const handleDeposit = async () => {
     if (!agentData?.agentWalletAddress || !depositAmount) return
     try {
       const parsedUnits = parseUnits(depositAmount, 6)
-      await sendTransactionAsync({
-        to: agentData.agentWalletAddress as `0x${string}`,
-        value: parsedUnits,
+      const tx = await writeContractAsync({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'transfer',
+        args: [agentData.agentWalletAddress as `0x${string}`, parsedUnits],
       })
+      setDepositTxHash(tx)
     } catch (err: any) {
       console.error('Deposit error:', err)
     }

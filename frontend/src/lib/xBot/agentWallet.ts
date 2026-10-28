@@ -8,12 +8,14 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { XPaymentResult } from './types'
+import { USDC_ADDRESS } from '@/lib/constants'
+import { USDC_ABI } from '@/lib/abi'
 
 // Arc Mainnet Chain Definition
 const arcMainnet = defineChain({
   id: 5042,
   name: 'Arc Mainnet',
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 6 },
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: {
     default: { http: [process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'] },
   },
@@ -68,6 +70,23 @@ export class XBotAgentWallet {
   }
 
   /**
+   * Returns live on-chain USDC ERC-20 balance
+   */
+  async getAgentBalance(): Promise<string> {
+    try {
+      const balanceRaw = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'balanceOf',
+        args: [this.account.address],
+      }) as bigint
+      return (Number(balanceRaw) / 1e6).toFixed(2)
+    } catch {
+      return '0.00'
+    }
+  }
+
+  /**
    * Executes a payment on Arc Network:
    * - 99% to Recipient
    * - 1% to EasyPay Fee Treasury (Your Wallet)
@@ -94,13 +113,15 @@ export class XBotAgentWallet {
       const netUnits = parseUnits(netAmountNumber.toString(), 6)
       const feeUnits = parseUnits(feeAmountNumber.toString(), 6)
 
-      // 2. Broadcast Recipient Transfer on Arc Network (Native USDC)
-      const recipientTxHash = await this.walletClient.sendTransaction({
+      // 2. Broadcast Recipient Transfer on Arc Network (USDC ERC-20)
+      const recipientTxHash = await this.walletClient.writeContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'transfer',
+        args: [recipientAddress as `0x${string}`, netUnits],
         account: this.account,
         chain: arcMainnet,
-        to: recipientAddress as `0x${string}`,
-        value: netUnits,
-      } as any)
+      })
 
       // 3. Wait for confirmation receipt (sub-second on Arc)
       await publicClient.waitForTransactionReceipt({
@@ -111,12 +132,14 @@ export class XBotAgentWallet {
       // 4. Broadcast 1% Fee Transfer to Your Treasury Wallet
       if (feeAmountNumber > 0 && isAddress(EASYPAY_FEE_TREASURY)) {
         try {
-          await this.walletClient.sendTransaction({
+          await this.walletClient.writeContract({
+            address: USDC_ADDRESS,
+            abi: USDC_ABI,
+            functionName: 'transfer',
+            args: [EASYPAY_FEE_TREASURY, feeUnits],
             account: this.account,
             chain: arcMainnet,
-            to: EASYPAY_FEE_TREASURY,
-            value: feeUnits,
-          } as any)
+          })
         } catch (feeErr) {
           console.warn('[XBotAgentWallet] Fee transfer notice:', feeErr)
         }

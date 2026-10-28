@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createPublicClient, createWalletClient, http, formatUnits, parseUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { ACTIVE_CHAIN } from '@/lib/constants'
+import { ACTIVE_CHAIN, USDC_ADDRESS } from '@/lib/constants'
+import { USDC_ABI } from '@/lib/abi'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,12 +53,18 @@ export async function GET(request: NextRequest) {
     // 2. The dedicated Agent Wallet address (Non-custodial hot vault)
     const agentAddress = agentAccount.address
 
-    // 3. Read on-chain native USDC balance of the Agent Wallet on Arc Network
+    // 3. Read on-chain canonical ERC-20 USDC balance (6 decimals)
     let balanceFormatted = '0.00'
     try {
-      const balanceWei = await publicClient.getBalance({ address: agentAddress })
-      balanceFormatted = Number(formatUnits(balanceWei, 6)).toFixed(2)
-    } catch {
+      const balanceUnits = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'balanceOf',
+        args: [agentAddress as `0x${string}`],
+      }) as bigint
+      balanceFormatted = Number(formatUnits(balanceUnits, 6)).toFixed(2)
+    } catch (balErr) {
+      console.warn('[AgentWalletAPI] USDC balance read error:', balErr)
       balanceFormatted = '0.00'
     }
 
@@ -92,22 +99,32 @@ export async function POST(request: NextRequest) {
       transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
     })
 
-    const sweepAmountNum = parseFloat(amount || '0')
-    const balanceWei = await publicClient.getBalance({ address: agentAccount.address })
-    const balanceNum = parseFloat(formatUnits(balanceWei, 6))
+    const balanceUnits = await publicClient.readContract({
+      address: USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: 'balanceOf',
+      args: [agentAccount.address],
+    }) as bigint
 
-    const withdrawNum = sweepAmountNum > 0 && sweepAmountNum <= balanceNum ? sweepAmountNum : Math.max(0, balanceNum - 0.01)
+    const balanceNum = parseFloat(formatUnits(balanceUnits, 6))
+    const sweepAmountNum = parseFloat(amount || '0')
+    const withdrawNum = sweepAmountNum > 0 && sweepAmountNum <= balanceNum ? sweepAmountNum : balanceNum
 
     if (withdrawNum <= 0) {
-      return NextResponse.json({ error: 'No funds available to withdraw' }, { status: 400 })
+      return NextResponse.json({ error: 'No USDC available to withdraw' }, { status: 400 })
     }
 
-    const txHash = await walletClient.sendTransaction({
+    const withdrawUnits = parseUnits(withdrawNum.toFixed(6), 6)
+
+    // Send ERC-20 USDC transfer back to main wallet
+    const txHash = await walletClient.writeContract({
+      address: USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: 'transfer',
+      args: [address as `0x${string}`, withdrawUnits],
       account: agentAccount,
       chain: ACTIVE_CHAIN,
-      to: address as `0x${string}`,
-      value: parseUnits(withdrawNum.toFixed(6), 6),
-    } as any)
+    })
 
     return NextResponse.json({
       success: true,

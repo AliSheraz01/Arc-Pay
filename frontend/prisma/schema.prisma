@@ -308,3 +308,26 @@ model ChatPaymentIntent {
   @@index([status])
 }
 
+model XBotTransaction {
+  id                String   @id @default(uuid())
+  tweetId           String   @unique
+  senderXId         String
+  senderUsername    String?
+  senderAddress     String?
+  recipientUsername String
+  recipientAddress  String
+  grossAmount       String   // e.g. "10.00"
+  netAmount         String   // e.g. "9.90"
+  feeAmount         String   // e.g. "0.10" (1% protocol fee)
+  txHash            String
+  status            String   @default("CONFIRMED") // PENDING, CONFIRMED, FAILED
+  action            String   @default("TIP") // TIP, PAY, BOUNTY
+  createdAt         DateTime @default(now())
+
+  @@index([tweetId])
+  @@index([senderXId])
+  @@index([recipientUsername])
+  @@index([createdAt])
+}
+
+

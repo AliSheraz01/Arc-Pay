@@ -3,12 +3,15 @@ import { TelegramAIAgent } from '@/lib/chatToPay/telegramAgent'
 
 export const dynamic = 'force-dynamic'
 
+// Telegram integration is paused. Set ENABLE_TELEGRAM=true to activate.
+const IS_TELEGRAM_ENABLED = process.env.ENABLE_TELEGRAM === 'true'
+
 /**
  * Telegram Webhook Health / Status
  */
 export async function GET() {
   return NextResponse.json({
-    status: 'active',
+    status: IS_TELEGRAM_ENABLED ? 'active' : 'paused',
     platform: 'telegram',
     endpoint: '/api/chat-to-pay/webhook/telegram',
   })
@@ -18,6 +21,13 @@ export async function GET() {
  * Incoming Telegram Updates (POST)
  */
 export async function POST(request: NextRequest) {
+  if (!IS_TELEGRAM_ENABLED) {
+    return NextResponse.json({
+      status: 'paused',
+      message: 'Telegram Chat-to-Pay is currently on hold / disabled.',
+    })
+  }
+
   try {
     const body = await request.json().catch(() => ({}))
 

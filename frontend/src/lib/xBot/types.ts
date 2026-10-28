@@ -22,6 +22,7 @@ export interface XMentionItem {
   id: string
   text: string
   authorId?: string
+  authorUsername?: string
   createdAt?: string
   conversationId?: string
 }

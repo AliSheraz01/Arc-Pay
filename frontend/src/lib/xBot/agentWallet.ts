@@ -1,8 +1,10 @@
+import crypto from 'crypto'
 import { 
   createPublicClient, 
   createWalletClient, 
   http, 
   parseUnits, 
+  formatUnits,
   defineChain, 
   isAddress 
 } from 'viem'
@@ -29,8 +31,8 @@ const publicClient = createPublicClient({
   transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
 })
 
-// Isolated Agent Hot Wallet Key
-const AGENT_PRIVATE_KEY = (
+// Central Master Relayer (Used for gas sponsorship & treasury)
+const MASTER_RELAYER_KEY = (
   process.env.X_BOT_AGENT_PRIVATE_KEY || 
   process.env.RELAYER_PRIVATE_KEY || 
   process.env.PRIVATE_KEY || 
@@ -45,40 +47,64 @@ const EASYPAY_FEE_TREASURY = (
 ) as `0x${string}`
 
 const EXPLORER_URL = process.env.EXPLORER_URL || 'https://explorer.arc.io'
-
-// 1% Protocol Fee Constant
 const PROTOCOL_FEE_PERCENT = 0.01
 
+/**
+ * Deterministically derives an isolated Agent Vault private key and account for a specific user.
+ * Each user gets a unique, mathematically distinct vault address on Arc Network.
+ */
+export function getUserAgentAccount(userAddress: string) {
+  const masterSecret = (
+    process.env.AGENT_VAULT_MASTER_SECRET || 
+    process.env.CHAT_SESSION_SECRET || 
+    'arc-easypay-agent-vault-salt-2026'
+  )
+  const derivedKey = '0x' + crypto
+    .createHmac('sha256', masterSecret)
+    .update(`EASYPAY_AGENT_VAULT:${userAddress.toLowerCase()}`)
+    .digest('hex') as `0x${string}`
+
+  return privateKeyToAccount(derivedKey)
+}
+
 export class XBotAgentWallet {
-  private walletClient: ReturnType<typeof createWalletClient>
-  private account: ReturnType<typeof privateKeyToAccount>
+  private masterRelayerClient: ReturnType<typeof createWalletClient>
+  private masterRelayerAccount: ReturnType<typeof privateKeyToAccount>
 
   constructor() {
-    this.account = privateKeyToAccount(AGENT_PRIVATE_KEY)
-    this.walletClient = createWalletClient({
-      account: this.account,
+    this.masterRelayerAccount = privateKeyToAccount(MASTER_RELAYER_KEY)
+    this.masterRelayerClient = createWalletClient({
+      account: this.masterRelayerAccount,
       chain: arcMainnet,
       transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
     })
   }
 
   /**
-   * Returns the agent wallet address for monitoring balance & funding
+   * Returns the master relayer / bot address
    */
   getAgentAddress(): string {
-    return this.account.address
+    return this.masterRelayerAccount.address
   }
 
   /**
-   * Returns live on-chain USDC ERC-20 balance
+   * Returns a specific user's dedicated Agent Vault address
    */
-  async getAgentBalance(): Promise<string> {
+  getUserVaultAddress(userAddress: string): string {
+    return getUserAgentAccount(userAddress).address
+  }
+
+  /**
+   * Returns live on-chain USDC ERC-20 balance for a user's vault
+   */
+  async getUserVaultBalance(userAddress: string): Promise<string> {
     try {
+      const vaultAccount = getUserAgentAccount(userAddress)
       const balanceRaw = await publicClient.readContract({
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: 'balanceOf',
-        args: [this.account.address],
+        args: [vaultAccount.address],
       }) as bigint
       return (Number(balanceRaw) / 1e6).toFixed(2)
     } catch {
@@ -87,11 +113,34 @@ export class XBotAgentWallet {
   }
 
   /**
-   * Executes a payment on Arc Network:
+   * Ensures the agent vault has sufficient native gas on Arc Network.
+   * If empty, the master relayer drips 0.0003 ARC gas.
+   */
+  private async ensureVaultGas(vaultAddress: `0x${string}`) {
+    try {
+      const gasBalance = await publicClient.getBalance({ address: vaultAddress })
+      if (gasBalance < parseUnits('0.0001', 18)) {
+        console.log(`[XBotAgentWallet] Sponsoring gas for vault ${vaultAddress}...`)
+        const dripTx = await this.masterRelayerClient.sendTransaction({
+          account: this.masterRelayerAccount,
+          chain: arcMainnet,
+          to: vaultAddress,
+          value: parseUnits('0.0003', 18),
+        } as any)
+        await publicClient.waitForTransactionReceipt({ hash: dripTx, timeout: 10_000 })
+      }
+    } catch (gasErr) {
+      console.warn('[XBotAgentWallet] Gas sponsorship notice:', gasErr)
+    }
+  }
+
+  /**
+   * Executes a payment directly from a specific user's isolated Agent Vault:
    * - 99% to Recipient
    * - 1% to EasyPay Fee Treasury (Your Wallet)
    */
-  async executePaymentWithFee(
+  async executePaymentFromUserVault(
+    senderUserAddress: string,
     recipientAddress: string,
     grossUsdc: number
   ): Promise<XPaymentResult> {
@@ -106,38 +155,68 @@ export class XBotAgentWallet {
         }
       }
 
-      // 1. Calculate 1% fee split
+      const senderVault = getUserAgentAccount(senderUserAddress)
+
+      // 1. Check user vault USDC balance
+      const balanceRaw = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: 'balanceOf',
+        args: [senderVault.address],
+      }) as bigint
+
+      const availableUsdc = Number(formatUnits(balanceRaw, 6))
+      if (availableUsdc < grossUsdc) {
+        return {
+          success: false,
+          grossAmount: grossUsdc.toFixed(2),
+          netAmount: '0',
+          feeAmount: '0',
+          error: `Insufficient Agent Vault balance. Available: $${availableUsdc.toFixed(2)} USDC`,
+        }
+      }
+
+      // 2. Ensure vault has gas to execute
+      await this.ensureVaultGas(senderVault.address)
+
+      const vaultWalletClient = createWalletClient({
+        account: senderVault,
+        chain: arcMainnet,
+        transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
+      })
+
+      // 3. Calculate 1% fee split
       const feeAmountNumber = Number((grossUsdc * PROTOCOL_FEE_PERCENT).toFixed(6))
       const netAmountNumber = Number((grossUsdc - feeAmountNumber).toFixed(6))
 
       const netUnits = parseUnits(netAmountNumber.toString(), 6)
       const feeUnits = parseUnits(feeAmountNumber.toString(), 6)
 
-      // 2. Broadcast Recipient Transfer on Arc Network (USDC ERC-20)
-      const recipientTxHash = await this.walletClient.writeContract({
+      // 4. Broadcast Recipient Transfer from User's Vault (USDC ERC-20)
+      const recipientTxHash = await vaultWalletClient.writeContract({
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: 'transfer',
         args: [recipientAddress as `0x${string}`, netUnits],
-        account: this.account,
+        account: senderVault,
         chain: arcMainnet,
       })
 
-      // 3. Wait for confirmation receipt (sub-second on Arc)
+      // 5. Wait for confirmation receipt (sub-second on Arc)
       await publicClient.waitForTransactionReceipt({
         hash: recipientTxHash,
         timeout: 10_000,
       })
 
-      // 4. Broadcast 1% Fee Transfer to Your Treasury Wallet
+      // 6. Broadcast 1% Fee Transfer to Your Treasury Wallet
       if (feeAmountNumber > 0 && isAddress(EASYPAY_FEE_TREASURY)) {
         try {
-          await this.walletClient.writeContract({
+          await vaultWalletClient.writeContract({
             address: USDC_ADDRESS,
             abi: USDC_ABI,
             functionName: 'transfer',
             args: [EASYPAY_FEE_TREASURY, feeUnits],
-            account: this.account,
+            account: senderVault,
             chain: arcMainnet,
           })
         } catch (feeErr) {

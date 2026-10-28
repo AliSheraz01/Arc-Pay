@@ -158,7 +158,37 @@ export class XBotWorker {
             continue
           }
 
-          // Resolve Recipient Address on Arc Network
+          // 1. Resolve Sender's Linked EasyPay Account for Isolated Vault Execution
+          let senderUserAddress: string | null = null
+          if (mention.authorId) {
+            try {
+              const senderSocial = await db.socialAccount.findFirst({
+                where: {
+                  provider: 'x',
+                  OR: [
+                    { providerUserId: mention.authorId },
+                    ...(mention.authorUsername ? [{ username: mention.authorUsername.toLowerCase() }] : []),
+                  ],
+                },
+                include: { user: true },
+              })
+              if (senderSocial?.user?.address) {
+                senderUserAddress = senderSocial.user.address
+              }
+            } catch (dbErr) {
+              console.warn('[XWorker] Failed to query sender social account:', dbErr)
+            }
+          }
+
+          if (!senderUserAddress) {
+            await this.xClient.reply(
+              mention.id,
+              `⚠️ You haven't linked your EasyPay wallet yet! Connect your 𝕏 account and fund your isolated Agent Vault at https://easyzpay.xyz/chat-to-pay?tab=x`
+            )
+            continue
+          }
+
+          // 2. Resolve Recipient Address on Arc Network
           const recipientAddress = await this.resolveRecipientAddress(intent.recipientUsername)
 
           if (!recipientAddress) {
@@ -170,8 +200,9 @@ export class XBotWorker {
             continue
           }
 
-          // Execute on Arc Network: 99% to recipient, 1% to your Fee Treasury
-          const result = await this.agentWallet.executePaymentWithFee(
+          // 3. Execute directly from Sender's Isolated Agent Vault on Arc Network
+          const result = await this.agentWallet.executePaymentFromUserVault(
+            senderUserAddress,
             recipientAddress,
             intent.grossAmount
           )

@@ -72,7 +72,22 @@ export class XBotWorker {
       }
     }
 
-    // 2. Check Arc On-chain Username Registry contract
+    // 2. Check Turso Database SocialAccount table
+    try {
+      const dbAcc = await db.socialAccount.findFirst({
+        where: {
+          username: cleanUser,
+        },
+        include: { user: true },
+      })
+      if (dbAcc?.user?.address) {
+        return dbAcc.user.address
+      }
+    } catch {
+      // Table query fallback
+    }
+
+    // 3. Check Arc On-chain Username Registry contract
     try {
       const onChainAddr = await publicClient.readContract({
         address: REGISTRY_ADDRESS,

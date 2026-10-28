@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { socialAccountsStore } from '@/app/api/resolve/[identifier]/route'
+import { db } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +23,39 @@ export async function POST(request: NextRequest) {
     }
 
     socialAccountsStore.set(address.toLowerCase(), account)
+
+    // Persist into Turso Database
+    try {
+      const user = await db.user.upsert({
+        where: { address: address.toLowerCase() },
+        update: {},
+        create: { address: address.toLowerCase() },
+      })
+
+      await db.socialAccount.upsert({
+        where: {
+          provider_providerUserId: {
+            provider: 'x',
+            providerUserId: account.providerUserId,
+          },
+        },
+        update: {
+          username: clean.toLowerCase(),
+          displayName: account.displayName,
+          avatar: account.avatar,
+        },
+        create: {
+          userId: user.id,
+          provider: 'x',
+          providerUserId: account.providerUserId,
+          username: clean.toLowerCase(),
+          displayName: account.displayName,
+          avatar: account.avatar,
+        },
+      })
+    } catch (dbErr) {
+      console.warn('[Social Connect DB] Fallback to memory store:', dbErr)
+    }
 
     return NextResponse.json({
       success: true,

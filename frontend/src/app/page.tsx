@@ -555,9 +555,9 @@ export default function DashboardPage() {
                 <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <QuickActionRow href="/send" icon={MdSend} label="Send Money" />
-                  <QuickActionRow href="/receive" icon={MdQrCode} label="Receive / QR Code" />
+                  <QuickActionRow href="/chat-to-pay?tab=x" icon={({ size }: { size?: number }) => <span style={{ fontWeight: 900, fontSize: (size || 16) + "px", lineHeight: 1, fontFamily: "sans-serif" }}>𝕏</span>} label="𝕏 Bot (Social Pay)" />
                   <QuickActionRow href="/cross-pay" icon={MdSwapHoriz} label="Cross Pay (Bridge & Pay)" />
-                  <QuickActionRow href="/chat-to-pay" icon={MdChat} label="Chat to Pay (Telegram AI)" />
+                  <QuickActionRow href="/chat-to-pay?tab=telegram" icon={MdChat} label="Chat to Pay (Telegram AI)" />
                   <QuickActionRow href="/bounties" icon={MdEmojiEvents} label="Explore Bounties" />
                 </div>
               </div>

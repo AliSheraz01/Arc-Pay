@@ -3,8 +3,8 @@ import { TelegramAIAgent } from '@/lib/chatToPay/telegramAgent'
 
 export const dynamic = 'force-dynamic'
 
-// Telegram integration is paused. Set ENABLE_TELEGRAM=true to activate.
-const IS_TELEGRAM_ENABLED = process.env.ENABLE_TELEGRAM === 'true'
+// Telegram integration is active by default. Set ENABLE_TELEGRAM=false if you ever want to pause it.
+const IS_TELEGRAM_ENABLED = process.env.ENABLE_TELEGRAM !== 'false'
 
 /**
  * Telegram Webhook Health / Status

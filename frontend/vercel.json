@@ -2,8 +2,5 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
-  "outputDirectory": ".next",
-  "crons": [
-    { "path": "/api/x-bot/poll", "schedule": "* * * * *" }
-  ]
+  "outputDirectory": ".next"
 }

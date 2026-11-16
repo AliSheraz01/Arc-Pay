@@ -102,12 +102,26 @@ export async function POST(request: NextRequest) {
       args: [userAgentAccount.address],
     }) as bigint
 
-    const balanceNum = parseFloat(formatUnits(balanceUnits, 6))
-    const sweepAmountNum = parseFloat(amount || '0')
-    const withdrawNum = sweepAmountNum > 0 && sweepAmountNum <= balanceNum ? sweepAmountNum : balanceNum
+    // Arc Network Gas Note: On Arc Chain, gas is paid in USDC.
+    // We reserve ~0.002 USDC (2,000 micro-units) so the vault can pay the network gas fee.
+    const GAS_RESERVE_UNITS = 2000n
 
-    if (withdrawNum <= 0) {
-      return NextResponse.json({ error: 'No USDC available in your Agent Vault to withdraw' }, { status: 400 })
+    if (balanceUnits <= GAS_RESERVE_UNITS) {
+      return NextResponse.json({ 
+        error: `Balance too low to cover Arc network gas fee (~0.002 USDC). Available: ${formatUnits(balanceUnits, 6)} USDC` 
+      }, { status: 400 })
+    }
+
+    const maxSweepUnits = balanceUnits - GAS_RESERVE_UNITS
+    let withdrawUnits = maxSweepUnits
+
+    if (amount && parseFloat(amount) > 0) {
+      try {
+        const requestedUnits = parseUnits(parseFloat(amount).toFixed(6), 6)
+        if (requestedUnits > 0 && requestedUnits <= maxSweepUnits) {
+          withdrawUnits = requestedUnits
+        }
+      } catch {}
     }
 
     // 2. Ensure user vault has gas to execute the withdrawal transfer
@@ -138,8 +152,6 @@ export async function POST(request: NextRequest) {
       transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL || process.env.RPC_URL || 'https://rpc.mainnet.arc.io'),
     })
 
-    const withdrawUnits = parseUnits(withdrawNum.toFixed(6), 6)
-
     // Send ERC-20 USDC transfer back to main wallet
     const txHash = await walletClient.writeContract({
       address: USDC_ADDRESS,
@@ -150,10 +162,24 @@ export async function POST(request: NextRequest) {
       chain: ACTIVE_CHAIN,
     })
 
+    // Wait for on-chain receipt to confirm success
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: 15_000,
+    })
+
+    if (receipt.status !== 'success') {
+      return NextResponse.json({ 
+        error: 'Withdrawal transaction reverted on Arc Network' 
+      }, { status: 500 })
+    }
+
+    const withdrawnFormatted = Number(formatUnits(withdrawUnits, 6)).toFixed(4)
+
     return NextResponse.json({
       success: true,
       txHash,
-      withdrawnUSDC: withdrawNum.toFixed(2),
+      withdrawnUSDC: withdrawnFormatted,
       destination: address,
     })
   } catch (err: any) {

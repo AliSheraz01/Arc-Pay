@@ -34,6 +34,7 @@ export function XAgentWalletCard() {
   const [copied, setCopied] = useState(false)
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawSuccess, setWithdrawSuccess] = useState('')
+  const [withdrawError, setWithdrawError] = useState('')
 
   const { writeContractAsync, isPending: isDepositing } = useWriteContract()
   const [depositTxHash, setDepositTxHash] = useState<`0x${string}` | undefined>()
@@ -93,19 +94,23 @@ export function XAgentWalletCard() {
     if (!address) return
     setWithdrawing(true)
     setWithdrawSuccess('')
+    setWithdrawError('')
     try {
       const res = await fetch('/api/x-bot/agent-wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address }),
       })
-      if (res.ok) {
-        const data = await res.json()
+      const data = await res.json()
+      if (res.ok && data.success) {
         setWithdrawSuccess(`Swept ${data.withdrawnUSDC} USDC back to your main wallet!`)
         fetchAgentData()
+      } else {
+        setWithdrawError(data.error || 'Withdrawal failed')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Withdraw error:', err)
+      setWithdrawError(err.message || 'Network error during withdrawal')
     } finally {
       setWithdrawing(false)
     }
@@ -355,6 +360,22 @@ export function XAgentWalletCard() {
             }}
           >
             ✅ {withdrawSuccess}
+          </div>
+        )}
+
+        {withdrawError && (
+          <div
+            style={{
+              padding: '12px',
+              borderRadius: '12px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444',
+              fontSize: '12.5px',
+              marginBottom: '16px',
+              fontWeight: 700,
+            }}
+          >
+            ⚠️ {withdrawError}
           </div>
         )}
 

@@ -10,9 +10,14 @@ backend/.env
 backend/prisma/dev.db
 backend/prisma/dev.db-journal
 *.db
+*.sqlite
 *.log
 .DS_Store
 Thumbs.db
 frontend/.turbo/
 backend/dist/
 
+# Hardhat
+artifacts/
+cache/
+deployments.json

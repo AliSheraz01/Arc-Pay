@@ -22,6 +22,10 @@ export class XBotWorker {
     this.agentWallet = new XBotAgentWallet()
   }
 
+  getXClientLastError(): string | null {
+    return this.xClient.lastError
+  }
+
   /**
    * Safe DB migration check: Ensures tables exist in Turso libSQL
    */

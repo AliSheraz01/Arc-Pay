@@ -35,10 +35,22 @@ export async function GET() {
 
     const feeTreasury = process.env.EASYPAY_FEE_TREASURY || process.env.NEXT_PUBLIC_FEE_TREASURY || '0x0D09b1348455540a6394c9d1Bf2F7C2b0cC40E6D'
 
+    let botUserId: string | null = null
+    let botUsername: string | null = null
+    if (xClient.isConfigured()) {
+      botUserId = await xClient.getBotUserId()
+      botUsername = xClient.botUsername
+    }
+
     return NextResponse.json({
       status: 'active',
       network: 'Arc Mainnet (Chain ID 5042)',
       xApiConfigured: xClient.isConfigured(),
+      botIdentity: {
+        botUserId,
+        botUsername,
+        apiError: xClient.lastError,
+      },
       agentWalletAddress: agentWallet.getAgentAddress(),
       feeTreasuryWallet: feeTreasury,
       feePercentage: '1%',

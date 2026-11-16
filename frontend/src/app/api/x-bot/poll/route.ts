@@ -33,6 +33,7 @@ async function handlePoll(request: NextRequest) {
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      twitterApiNote: worker.getXClientLastError() || 'OK (0 errors)',
       ...summary,
     })
   } catch (err: any) {

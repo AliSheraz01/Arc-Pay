@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useChainId, useSwitchChain } from 'wagmi'
 import {
-  MdHome,
   MdSend,
   MdCallReceived,
   MdHistory,
@@ -76,16 +75,42 @@ const SUPPORTED_NETWORKS = [
 ]
 
 export const SIDEBAR_NAV_ITEMS = [
-  { href: '/app', label: 'Home', icon: MdHome, color: '#2B5BFF' },
-  { href: '/send', label: 'Send', icon: MdSend, color: '#1DB954' },
-  { href: '/receive', label: 'Receive', icon: MdCallReceived, color: '#F5B800' },
-  { href: '/cross-pay', label: 'Cross Pay', icon: MdLink, color: '#8B5CF6' },
-  { href: '/chat-to-pay', label: 'Chat to Pay', icon: MdChat, color: '#06B6D4' },
-  { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome, color: '#F97316' },
-  { href: '/activity', label: 'History', icon: MdHistory, color: '#64748B' },
-  { href: '/profile', label: 'Profile', icon: MdPerson, color: '#EC4899' },
-  { href: '/settings', label: 'Settings', icon: MdSettings, color: '#475569' },
+  { href: '/send', label: 'Send', icon: MdSend },
+  { href: '/receive', label: 'Receive', icon: MdCallReceived },
+  { href: '/cross-pay', label: 'Cross Pay', icon: MdLink },
+  { href: '/chat-to-pay', label: 'Chat to Pay', icon: MdChat },
+  { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
+  { href: '/activity', label: 'History', icon: MdHistory },
+  { href: '/profile', label: 'Profile', icon: MdPerson },
+  { href: '/settings', label: 'Settings', icon: MdSettings },
 ]
+
+export function EasyZpayArchMark({ size = 32 }: { size?: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.28),
+        background: 'var(--blue)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        width={Math.round(size * 0.68)}
+        height={Math.round(size * 0.34)}
+        viewBox="0 0 120 60"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path d="M0 60A60 60 0 0 1 120 60L88 60A28 28 0 0 0 32 60Z" fill="#FFFFFF" />
+      </svg>
+    </span>
+  )
+}
 
 interface SidebarProps {
   drawerMode?: boolean
@@ -150,7 +175,6 @@ export function Sidebar({
     document.documentElement.setAttribute('data-theme', targetTheme)
   }
 
-  // Focus & Escape handling when used as a slide-in drawer on desktop "/"
   useEffect(() => {
     if (!drawerMode) return
     if (isOpen) {
@@ -177,7 +201,6 @@ export function Sidebar({
 
   return (
     <>
-      {/* Scrim when drawerMode is active */}
       {drawerMode && (
         <div
           onClick={onClose}
@@ -193,7 +216,6 @@ export function Sidebar({
         />
       )}
 
-      {/* Desktop Sidebar (Real component used both docked in /app and as slide-in on /) */}
       <aside
         id="app-sidebar"
         aria-label="Dashboard"
@@ -212,7 +234,6 @@ export function Sidebar({
         }}
       >
         <div>
-          {/* Logo + Close button in drawer mode */}
           <div
             style={{
               display: 'flex',
@@ -232,16 +253,7 @@ export function Sidebar({
                 gap: '10px',
               }}
             >
-              <img
-                src="/assets/easyzpay-logo.jpg"
-                alt="EasyZpay"
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '10px',
-                  objectFit: 'cover',
-                }}
-              />
+              <EasyZpayArchMark size={32} />
               <span
                 style={{
                   fontWeight: 700,
@@ -278,7 +290,6 @@ export function Sidebar({
             )}
           </div>
 
-          {/* Live Network Status */}
           <div
             style={{
               display: 'flex',
@@ -301,7 +312,6 @@ export function Sidebar({
             <span>{currentNetwork.name}</span>
           </div>
 
-          {/* Connect Wallet button inside drawer mode */}
           {drawerMode && (
             <div
               className="drawer-stagger-item"
@@ -314,12 +324,10 @@ export function Sidebar({
             </div>
           )}
 
-          {/* Navigation links */}
+          {/* Navigation links: Send, Receive, Cross Pay, Chat to Pay, Bounties, History, Profile, Settings */}
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {SIDEBAR_NAV_ITEMS.map((item, idx) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href === '/app' && pathname === '/app')
+              const isActive = pathname === item.href
               const Icon = item.icon
               return (
                 <Link
@@ -335,15 +343,6 @@ export function Sidebar({
                       : undefined
                   }
                 >
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: isActive ? 'var(--blue-ink)' : item.color,
-                      flexShrink: 0,
-                    }}
-                  />
                   <Icon size={18} />
                   <span>{item.label}</span>
                 </Link>
@@ -352,9 +351,7 @@ export function Sidebar({
           </nav>
         </div>
 
-        {/* Bottom Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
-          {/* Network Switcher */}
           <button
             type="button"
             onClick={() => setShowNetworkModal(true)}
@@ -395,7 +392,6 @@ export function Sidebar({
             <MdSwapHoriz size={20} style={{ color: 'var(--muted)' }} />
           </button>
 
-          {/* Theme switcher pill capsule */}
           <div
             style={{
               display: 'flex',
@@ -429,7 +425,7 @@ export function Sidebar({
                 transition: 'all 0.2s',
               }}
             >
-              <MdLightMode size={15} style={{ color: '#f5c542' }} />
+              <MdLightMode size={15} style={{ color: '#D97706' }} />
               <span>Light</span>
             </button>
             <button
@@ -460,7 +456,6 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* Mobile Glass Bottom Tab Bar (visible on all app pages below 768px) */}
       {!drawerMode && (
         <MobileGlassBar
           visible={true}
@@ -470,7 +465,6 @@ export function Sidebar({
         />
       )}
 
-      {/* Network Switcher Modal */}
       {showNetworkModal && (
         <div
           onClick={() => setShowNetworkModal(false)}
@@ -575,21 +569,6 @@ export function Sidebar({
           </div>
         </div>
       )}
-
-      <style jsx global>{`
-        .sidebar.drawer-open .drawer-stagger-item {
-          animation: sidebar-slide-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-          animation-delay: calc(0.12s + var(--stagger-i, 0) * 65ms);
-          opacity: 0;
-          transform: translateX(-40px);
-        }
-        @keyframes sidebar-slide-in {
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-      `}</style>
     </>
   )
 }

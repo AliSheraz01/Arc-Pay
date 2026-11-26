@@ -5,11 +5,10 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'motion/react'
 import {
-  MdHome,
   MdSend,
+  MdCallReceived,
   MdChat,
   MdMoreHoriz,
-  MdCallReceived,
   MdLink,
   MdAutoAwesome,
   MdHistory,
@@ -29,18 +28,17 @@ interface MobileGlassBarProps {
 }
 
 const PRIMARY_TABS = [
-  { href: '/app', label: 'Home', icon: MdHome },
   { href: '/send', label: 'Send', icon: MdSend },
+  { href: '/receive', label: 'Receive', icon: MdCallReceived },
   { href: '/chat-to-pay', label: 'Chat to Pay', icon: MdChat },
 ]
 
 const MORE_ITEMS = [
-  { href: '/receive', label: 'Receive', icon: MdCallReceived, color: '#F5B800' },
-  { href: '/cross-pay', label: 'Cross Pay', icon: MdLink, color: '#8B5CF6' },
-  { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome, color: '#F97316' },
-  { href: '/activity', label: 'History', icon: MdHistory, color: '#64748B' },
-  { href: '/profile', label: 'Profile', icon: MdPerson, color: '#EC4899' },
-  { href: '/settings', label: 'Settings', icon: MdSettings, color: '#475569' },
+  { href: '/cross-pay', label: 'Cross Pay', icon: MdLink },
+  { href: '/bounties', label: 'Bounties', icon: MdAutoAwesome },
+  { href: '/activity', label: 'History', icon: MdHistory },
+  { href: '/profile', label: 'Profile', icon: MdPerson },
+  { href: '/settings', label: 'Settings', icon: MdSettings },
 ]
 
 export function MobileGlassBar({
@@ -138,7 +136,7 @@ export function MobileGlassBar({
       <AnimatePresence>
         {moreOpen && (
           <div className="md:hidden fixed inset-0 z-[1000]">
-            {/* Scrim — tap outside to close */}
+            {/* Tap outside to dismiss */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -181,7 +179,6 @@ export function MobileGlassBar({
                 touchAction: 'none',
               }}
             >
-              {/* Drag Handle */}
               <div
                 style={{
                   width: '40px',
@@ -254,16 +251,7 @@ export function MobileGlassBar({
                         fontWeight: 600,
                       }}
                     >
-                      <span
-                        style={{
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          background: active ? 'var(--blue-ink)' : item.color,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <Icon size={17} />
+                      <Icon size={18} />
                       <span>{item.label}</span>
                     </Link>
                   )

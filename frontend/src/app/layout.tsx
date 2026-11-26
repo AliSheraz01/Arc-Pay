@@ -19,8 +19,11 @@ export const metadata: Metadata = {
   title: 'EasyZpay — Pay anyone by username on Arc Network',
   description: 'Send USDC on Arc Network with a username instead of a 42-character wallet address. Works in the app and in our Telegram bot.',
   icons: {
-    icon: '/assets/easyzpay-logo.jpg',
-    apple: '/assets/easyzpay-logo.jpg',
+    icon: [
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
 }
 

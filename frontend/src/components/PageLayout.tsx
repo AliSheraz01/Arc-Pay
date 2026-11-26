@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { Sidebar } from './Sidebar'
+import { Sidebar, EasyZpayArchMark } from './Sidebar'
 import { LoginButton } from './LoginButton'
 import { FaucetModal } from './FaucetModal'
 
@@ -20,12 +20,9 @@ export function PageLayout({ children }: PageLayoutProps) {
         color: 'var(--text-primary)',
       }}
     >
-      {/* Real Sidebar Navigation (Desktop fixed + Mobile Glass Bar) */}
       <Sidebar />
 
-      {/* Main Content Panel */}
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
-        {/* Compact Top Header: Mobile shows Logo left + Connect Wallet right; Desktop shows Faucet + Connect Wallet right */}
         <header
           style={{
             position: 'sticky',
@@ -40,23 +37,13 @@ export function PageLayout({ children }: PageLayoutProps) {
             borderBottom: '1px solid var(--line)',
           }}
         >
-          {/* Mobile Left: Compact EasyZpay Logo */}
+          {/* Mobile Left: Compact EasyZpay Arch Mark + Text */}
           <Link
             href="/"
             className="flex md:hidden items-center gap-2.5 no-underline"
             style={{ color: 'var(--ink)' }}
           >
-            <img
-              src="/assets/easyzpay-logo.jpg"
-              alt="EasyZpay"
-              style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '9px',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
+            <EasyZpayArchMark size={30} />
             <span
               style={{
                 fontWeight: 700,
@@ -69,17 +56,14 @@ export function PageLayout({ children }: PageLayoutProps) {
             </span>
           </Link>
 
-          {/* Desktop spacer */}
           <div className="hidden md:block" />
 
-          {/* Right section - Faucet + Connect Wallet */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FaucetModal />
             <LoginButton />
           </div>
         </header>
 
-        {/* Children Page Content */}
         <div style={{ padding: '24px', flex: 1, position: 'relative', zIndex: 1 }}>
           {children}
         </div>

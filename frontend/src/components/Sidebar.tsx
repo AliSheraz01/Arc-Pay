@@ -28,7 +28,7 @@ const SUPPORTED_NETWORKS = [
     name: 'Arc Mainnet',
     shortName: 'Arc',
     color: '#2B5BFF',
-    logoUrl: '/assets/arc-logo.jpg',
+    logoUrl: '/logos/arc-mark.svg',
   },
   {
     chainId: 8453,
@@ -156,7 +156,7 @@ export function Sidebar({
         ? `Chain ${chainId}`
         : 'Arc Mainnet',
     color: chainId === 8453 ? '#0052ff' : '#2B5BFF',
-    logoUrl: chainId === 8453 ? '/logos/base.svg' : '/assets/arc-logo.jpg',
+    logoUrl: chainId === 8453 ? '/logos/base.svg' : '/logos/arc-mark.svg',
   }
 
   useEffect(() => {

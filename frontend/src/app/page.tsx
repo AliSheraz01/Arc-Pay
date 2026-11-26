@@ -177,7 +177,30 @@ export default function HomePage() {
 
             <div className="v4-arc">
               <span>Native on</span>
-              <img alt="Arc Network" src="/assets/arc-logo.jpg" />
+              <svg
+                width="82"
+                height="26"
+                viewBox="0 0 210 64"
+                fill="none"
+                aria-label="Arc Network"
+                style={{ display: 'block', color: 'var(--ink)' }}
+              >
+                <path
+                  d="M8 54C11 25 22 10 34 10C46 10 57 25 60 54C54.5 50.5 48 48.5 40 48.5H27.5V40.5H45.5C43.5 27 39 19.5 34 19.5C28 19.5 22 30 19.5 54H8Z"
+                  fill="currentColor"
+                />
+                <text
+                  x="74"
+                  y="52"
+                  fill="currentColor"
+                  fontFamily="var(--font)"
+                  fontSize="48"
+                  fontWeight="500"
+                  letterSpacing="-1.5"
+                >
+                  Arc
+                </text>
+              </svg>
             </div>
 
             <div className="v4-social-links">

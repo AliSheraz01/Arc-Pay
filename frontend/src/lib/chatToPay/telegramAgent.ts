@@ -223,6 +223,32 @@ export class TelegramAIAgent {
       return
     }
 
+    // B1: Check real on-chain USDC balance using the same ERC-20 contract & decimals before showing Confirm
+    const balanceCheck = await this.relayer.checkUsdcBalance(intent.amount)
+    if (balanceCheck.checkFailed) {
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ <b>Network Busy:</b>\nCould not verify your USDC balance right now. Please try again in a moment.`
+      )
+      return
+    }
+
+    if (!balanceCheck.sufficient) {
+      await sendTelegramMessage(
+        chatId,
+        `⚠️ <b>Insufficient USDC Balance</b>\n\n` +
+          `Current balance: <b>${balanceCheck.balanceFormatted} USDC</b>\n` +
+          `Amount needed: <b>${balanceCheck.neededFormatted} USDC</b>\n\n` +
+          `Top up your USDC on Arc Mainnet at <a href="https://easyzpay.xyz/receive">easyzpay.xyz/receive</a> and try again.`,
+        {
+          inlineKeyboard: [
+            [{ text: 'Top Up USDC', url: 'https://easyzpay.xyz/receive' }],
+          ],
+        }
+      )
+      return
+    }
+
     // Create Pending Intent with 2-minute expiry
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000)
     const pending = await db.chatPaymentIntent.create({
@@ -251,12 +277,12 @@ export class TelegramAIAgent {
         `👤 <b>Recipient:</b> ${intent.recipientInput} (<code>${shortAddress}</code>)\n` +
         `⛽ <b>Network:</b> Arc Mainnet (Gasless Relayer)\n` +
         `🛡️ <b>Remaining Allowance After:</b> ${remainingAfter} USDC\n\n` +
-        `Tap below to broadcast or cancel:`,
+        `Tap below to confirm or cancel:`,
       {
         inlineKeyboard: [
           [
-            { text: '✅ Confirm & Broadcast', callback_data: `confirm_${pending.id}` },
-            { text: '❌ Cancel', callback_data: `cancel_${pending.id}` },
+            { text: 'Confirm', callback_data: `confirm_${pending.id}` },
+            { text: 'Cancel', callback_data: `cancel_${pending.id}` },
           ],
         ],
       }
@@ -296,18 +322,25 @@ export class TelegramAIAgent {
       return
     }
 
-    // Handle Confirm Payment Button
+    // Handle Confirm Payment Button (idempotent)
     if (data.startsWith('confirm_')) {
       const intentId = data.replace('confirm_', '')
       await this.executePaymentIntent(chatId, intentId)
       return
     }
 
+    // Handle Retry Payment Button
+    if (data.startsWith('retry_')) {
+      const intentId = data.replace('retry_', '')
+      await this.executePaymentIntent(chatId, intentId, { isRetry: true })
+      return
+    }
+
     // Handle Cancel Payment Button
     if (data.startsWith('cancel_')) {
       const intentId = data.replace('cancel_', '')
-      await db.chatPaymentIntent.update({
-        where: { id: intentId },
+      await db.chatPaymentIntent.updateMany({
+        where: { id: intentId, status: 'AWAITING_CONFIRMATION' },
         data: { status: 'REJECTED' },
       }).catch(() => null)
 
@@ -470,7 +503,7 @@ export class TelegramAIAgent {
       )
     } catch (err: any) {
       console.error('[Telegram Disconnect] Error:', err)
-      await sendTelegramMessage(chatId, `❌ Disconnect failed: ${err.message}`)
+      await sendTelegramMessage(chatId, `❌ Could not disconnect right now. Please try again.`)
     }
   }
 
@@ -499,13 +532,30 @@ export class TelegramAIAgent {
   }
 
   /**
-   * Execute Confirmed Payment via Relayer on Arc Mainnet
+   * Execute Confirmed Payment via Relayer on Arc Mainnet (Idempotent)
    */
-  private async executePaymentIntent(chatId: number, intentId: string): Promise<void> {
-    await db.chatPaymentIntent.update({
-      where: { id: intentId },
-      data: { status: 'CONFIRMED' },
-    }).catch(() => null)
+  private async executePaymentIntent(
+    chatId: number,
+    intentId: string,
+    opts?: { isRetry?: boolean }
+  ): Promise<void> {
+    // B4: Atomic claim so double-taps cannot send twice
+    const expectedStatus = opts?.isRetry ? 'FAILED' : 'AWAITING_CONFIRMATION'
+    const claimed = await db.chatPaymentIntent
+      .updateMany({
+        where: {
+          id: intentId,
+          status: expectedStatus,
+          expiresAt: { gt: new Date() },
+        },
+        data: { status: 'CONFIRMED' },
+      })
+      .catch(() => ({ count: 0 }))
+
+    if (claimed.count === 0) {
+      // Already confirmed/executed/cancelled/expired — ignore duplicate tap
+      return
+    }
 
     const execution = await this.relayer.executePayment(intentId)
 
@@ -524,9 +574,14 @@ export class TelegramAIAgent {
         }
       )
     } else {
+      const keyboard: InlineKeyboardButton[][] = []
+      if (execution.retryable) {
+        keyboard.push([{ text: 'Retry', callback_data: `retry_${intentId}` }])
+      }
       await sendTelegramMessage(
         chatId,
-        `❌ <b>Payment Execution Failed:</b>\n${execution.error || 'Network error on Arc Chain'}`
+        `❌ <b>Payment Failed:</b>\n${execution.error || 'Could not complete payment. Please try again.'}`,
+        keyboard.length > 0 ? { inlineKeyboard: keyboard } : undefined
       )
     }
   }

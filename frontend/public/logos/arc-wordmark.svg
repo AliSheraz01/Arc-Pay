@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 64" fill="none">
+  <!-- Arc parabolic arch mark -->
+  <path
+    d="M8 54C11 25 22 10 34 10C46 10 57 25 60 54C54.5 50.5 48 48.5 40 48.5H27.5V40.5H45.5C43.5 27 39 19.5 34 19.5C28 19.5 22 30 19.5 54H8Z"
+    fill="currentColor"
+  />
+  <!-- Arc wordmark -->
+  <text
+    x="74"
+    y="52"
+    fill="currentColor"
+    font-family="Inter Tight, Inter, system-ui, -apple-system, sans-serif"
+    font-size="48"
+    font-weight="400"
+    letter-spacing="-1.5"
+  >Arc</text>
+</svg>

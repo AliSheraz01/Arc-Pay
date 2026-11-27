@@ -81,7 +81,7 @@ export const CCTP_V2_MAINNET_CONFIGS: Record<number, CctpChainConfig> = {
     rpcUrl: 'https://rpc.mainnet.arc.io',
     explorerUrl: 'https://explorer.arc.io',
     color: '#1035f6',
-    logoUrl: 'https://explorer.arc.io/favicon.ico'
+    logoUrl: '/logos/arc-mark.svg'
   },
   // Base Mainnet (Domain 6)
   8453: {
@@ -182,7 +182,7 @@ export const CCTP_V2_TESTNET_CONFIGS: Record<number, CctpChainConfig> = {
     rpcUrl: 'https://rpc.testnet.arc.network',
     explorerUrl: 'https://testnet.arcscan.app',
     color: '#6b5bff',
-    logoUrl: 'https://testnet.arcscan.app/favicon.ico'
+    logoUrl: '/logos/arc-mark.svg'
   },
   84532: {
     chainId: 84532,

@@ -1,715 +1,351 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from 'wagmi'
-import { PageLayout } from '@/components/PageLayout'
-import { NetworkGuard } from '@/components/NetworkGuard'
-import { 
-  USDC_ADDRESS, 
-  REGISTRY_ADDRESS, 
-  ROUTER_ADDRESS, 
-  EXPLORER_URL, 
-  ARC_CHAIN_ID, 
-  BACKEND_URL 
-} from '@/lib/constants'
-import { ACTIVE_CHAIN } from '@/config/network'
-import { USDC_ABI, REGISTRY_ABI } from '@/lib/abi'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { formatUnits } from 'viem'
-import { useQuery } from '@tanstack/react-query'
-import { 
-  MdSend, 
-  MdCallReceived, 
-  MdVisibility, 
-  MdVisibilityOff, 
-  MdPerson, 
-  MdQrCode, 
-  MdLink, 
-  MdMonetizationOn, 
-  MdTimeline, 
-  MdMenuBook, 
-  MdOpenInNew,
-  MdChevronRight,
-  MdCheckCircle,
-  MdAccessTime,
-  MdCallMade,
-  MdSwapHoriz,
-  MdEmojiEvents,
-  MdChat
-} from 'react-icons/md'
+import { useRouter } from 'next/navigation'
+import { Sidebar, EasyZpayArchMark } from '@/components/Sidebar'
+import { MobileGlassBar } from '@/components/MobileGlassBar'
 
-interface Transaction {
-  id: string
-  txHash: string
-  fromAddress: string
-  toAddress: string
-  amount: string
-  memo?: string
-  status: string
-  timestamp: string
-}
+const HEADLINE_WORDS = [
+  'Pay',
+  'anyone',
+  'by',
+  'username,',
+  'on',
+  'the',
+  'web',
+  'or',
+  'Telegram.',
+]
 
-export default function DashboardPage() {
-  const { address, isConnected } = useAccount()
-  const chainId = useChainId()
-  const isCorrectNetwork = chainId === ARC_CHAIN_ID
-
-  const [hideBalance, setHideBalance] = useState(false)
-  const [usernameInput, setUsernameInput] = useState('')
-  const [registering, setRegistering] = useState(false)
-  const [regError, setRegError] = useState('')
-  const [regTxHash, setRegTxHash] = useState<`0x${string}` | undefined>()
-
-  const { writeContractAsync } = useWriteContract()
-
-  // 1. Read USDC Balance of user
-  const { data: usdcBalance, isLoading: balanceLoading, refetch: refetchBalance } = useReadContract({
-    address: USDC_ADDRESS,
-    abi: USDC_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && isCorrectNetwork, refetchInterval: 5000 },
-  })
-
-  // 2. Read current username registered to address
-  const { data: myUsername, refetch: refetchUsername } = useReadContract({
-    address: REGISTRY_ADDRESS,
-    abi: REGISTRY_ABI,
-    functionName: 'getMyUsername',
-    account: address,
-    query: { enabled: !!address && isCorrectNetwork },
-  })
-
-  // 3. Fetch transactions
-  const { data: transactions, isLoading: txsLoading, refetch: refetchTxs } = useQuery({
-    queryKey: ['transactions', address],
-    queryFn: async () => {
-      if (!address) return []
-      const res = await fetch(`${BACKEND_URL}/api/transactions/${address}`)
-      if (!res.ok) return []
-      return res.json() as Promise<Transaction[]>
-    },
-    enabled: !!address && isCorrectNetwork,
-    refetchInterval: 8000,
-  })
-
-  const { isLoading: waitingReg, isSuccess: regSuccess } = useWaitForTransactionReceipt({ hash: regTxHash })
+export default function HomePage() {
+  const router = useRouter()
+  const visRef = useRef<HTMLElement>(null)
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [visIn, setVisIn] = useState(false)
+  const [desktopDrawerOpen, setDesktopDrawerOpen] = useState(false)
+  const [mobileBarOpen, setMobileBarOpen] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   useEffect(() => {
-    if (regSuccess) {
-      setRegistering(false)
-      setUsernameInput('')
-      refetchUsername()
-      refetchBalance()
-      refetchTxs()
-    }
-  }, [regSuccess, refetchUsername, refetchBalance, refetchTxs])
+    const saved = localStorage.getItem('theme') as 'dark' | 'light' | null
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const resolved = saved || (prefersDark ? 'dark' : 'light')
+    setTheme(resolved)
+    document.documentElement.setAttribute('data-theme', resolved)
+  }, [])
 
-  const formattedBalance = usdcBalance ? parseFloat(formatUnits(usdcBalance, 6)).toFixed(2) : '0.00'
+  const handleToggleTheme = (next: 'light' | 'dark') => {
+    setTheme(next)
+    localStorage.setItem('theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+  }
 
-  async function handleRegisterUsername() {
-    if (!usernameInput) return
-    const username = usernameInput.toLowerCase().trim().replace('@', '')
-    if (username.length < 3 || username.length > 30) {
-      setRegError('Username must be 3-30 characters')
-      return
-    }
-    if (!/^[a-z0-9_]+$/.test(username)) {
-      setRegError('Only lowercase letters, numbers, and underscores are allowed')
-      return
-    }
-    setRegistering(true)
-    setRegError('')
-    try {
-      const tx = await writeContractAsync({
-        address: REGISTRY_ADDRESS,
-        abi: REGISTRY_ABI,
-        functionName: 'registerUsername',
-        args: [username],
-      })
-      setRegTxHash(tx)
-    } catch (err: unknown) {
-      console.error('Username registration failed:', err)
-      const msg = err instanceof Error ? err.message : 'Registration failed'
-      setRegError(
-        msg.includes('already taken') 
-          ? 'Username is already taken' 
-          : msg.includes('has a username') 
-          ? 'This wallet already has a username' 
-          : 'Registration failed. Check your wallet balance for gas.'
+  // IntersectionObserver reveal for the blue visual panel below the first screen
+  useEffect(() => {
+    const el = visRef.current
+    if (!el) return
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              setVisIn(true)
+              io.disconnect()
+            }
+          })
+        },
+        { threshold: 0.12 }
       )
-      setRegistering(false)
+      io.observe(el)
+      return () => io.disconnect()
+    } else {
+      setVisIn(true)
+    }
+  }, [])
+
+  // Pointer parallax on the blue visual panel (respects prefers-reduced-motion)
+  useEffect(() => {
+    const el = visRef.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    const onMove = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect()
+      el.style.setProperty('--mx', ((e.clientX - r.left) / r.width - 0.5).toFixed(3))
+      el.style.setProperty('--my', ((e.clientY - r.top) / r.height - 0.5).toFixed(3))
+    }
+    el.addEventListener('pointermove', onMove)
+    return () => el.removeEventListener('pointermove', onMove)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    }
+  }, [])
+
+  const handleLaunchApp = () => {
+    const isMobile = window.innerWidth < 768
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (navTimerRef.current) clearTimeout(navTimerRef.current)
+
+    if (isMobile) {
+      // A4: Mobile (<768px) — floating pill glass tab bar rises from bottom, then navigate client-side to /send
+      setMobileBarOpen(true)
+      navTimerRef.current = setTimeout(
+        () => {
+          router.push('/send')
+        },
+        reduced ? 150 : 750
+      )
+    } else {
+      // A3: Desktop — real Sidebar slides in from the left, tabs float in one by one, then navigate client-side to /send
+      setDesktopDrawerOpen(true)
+      navTimerRef.current = setTimeout(
+        () => {
+          router.push('/send')
+        },
+        reduced ? 150 : 1050
+      )
     }
   }
 
-  return (
-    <PageLayout>
-      <NetworkGuard>
-        {!isConnected ? (
-          <div style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
-            {/* Hero badge */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
-              borderRadius: '100px', padding: '6px 14px', marginBottom: '28px',
-            }}>
-              <span style={{ color: 'var(--accent)', fontSize: '12px', fontWeight: 800, letterSpacing: '0.05em' }}>
-                ⚡ POWERED BY ARC NETWORK
-              </span>
-            </div>
+  const handleCloseDrawer = () => {
+    if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    setDesktopDrawerOpen(false)
+  }
 
-            <h1 style={{
-              fontSize: '44px', fontWeight: 900,
-              background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--accent-bright) 50%, var(--accent) 100%)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '16px',
-            }}>
-              Send Money at the Speed of Web3
+  const handleDrawerNavigate = () => {
+    if (navTimerRef.current) clearTimeout(navTimerRef.current)
+    setDesktopDrawerOpen(false)
+  }
+
+  return (
+    <div className="v4-root">
+      <div className="v4-panel">
+        {/* First Screen (order: 1, 100svh centered) */}
+        <div className="v4-right">
+          <header className="v4-header">
+            <Link href="/" className="v4-logo">
+              <EasyZpayArchMark size={30} />
+              <span>EasyZpay</span>
+            </Link>
+
+            <button
+              type="button"
+              className="v4-top"
+              onClick={handleLaunchApp}
+              aria-controls="app-sidebar"
+              aria-expanded={desktopDrawerOpen}
+            >
+              Launch App
+            </button>
+          </header>
+
+          <div className="v4-copy">
+            <h1 className="v4-h1" aria-label="Pay anyone by username, on the web or Telegram.">
+              {HEADLINE_WORDS.map((word, idx) => (
+                <React.Fragment key={word + idx}>
+                  <span className="v4-w">
+                    <span style={{ ['--i' as string]: idx }}>{word}</span>
+                  </span>
+                  {idx < HEADLINE_WORDS.length - 1 ? ' ' : ''}
+                </React.Fragment>
+              ))}
             </h1>
 
-            <p style={{ color: 'var(--text-secondary)', fontSize: '16px', lineHeight: 1.6, marginBottom: '36px' }}>
-              Instant USDC transfers on Arc Network. Zero friction, near-zero fees, and real-time finality.
+            <p className="v4-sub">
+              Send USDC on Arc Network with a username instead of a 42-character wallet address. Works in the app and in our Telegram bot.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '40px', textAlign: 'left' }}>
-              {[
-                { icon: '⚡', label: 'Instant', desc: 'Sub-second finality' },
-                { icon: '💸', label: 'Cheap', desc: 'Near-zero gas fees' },
-                { icon: '🔒', label: 'Secure', desc: 'Non-custodial wallet' },
-                { icon: '📱', label: 'Simple', desc: 'Send by @username' },
-              ].map(f => (
-                <div key={f.label} style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '16px',
-                  padding: '16px',
-                }}>
-                  <div style={{ fontSize: '24px', marginBottom: '6px' }}>{f.icon}</div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>{f.label}</div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{f.desc}</div>
-                </div>
-              ))}
+            <div className="v4-cta">
+              <button
+                type="button"
+                className="v4-btn v4-primary"
+                onClick={handleLaunchApp}
+                aria-controls="app-sidebar"
+                aria-expanded={desktopDrawerOpen}
+              >
+                Launch App
+              </button>
+              <Link className="v4-btn v4-ghost" href="/docs">
+                Read Docs
+              </Link>
             </div>
 
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              Connect your wallet at the top right to access the dashboard
-            </p>
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '2.1fr 1fr',
-            gap: '24px',
-            maxWidth: '1200px',
-            margin: '0 auto',
-          }}
-          className="dashboard-grid"
-          >
-            {/* Left Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Balance Card */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '32px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                position: 'relative',
-                overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', zIndex: 2 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Total Balance
-                    </span>
-                    <button 
-                      onClick={() => setHideBalance(!hideBalance)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
-                    >
-                      {hideBalance ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
-                    <span style={{ fontSize: '48px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
-                      {balanceLoading ? '...' : hideBalance ? '••••••' : formattedBalance}
-                    </span>
-                    <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent)' }}>USDC</span>
-                  </div>
-
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, marginBottom: '24px', display: 'block' }}>
-                    {balanceLoading ? '...' : hideBalance ? '$••••••' : `$${formattedBalance} USD`}
-                  </span>
-
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <Link href="/send" style={{ textDecoration: 'none' }}>
-                      <button style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'var(--accent)',
-                        border: 'none', borderRadius: '16px', padding: '12px 28px',
-                        color: 'white', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
-                        boxShadow: '0 4px 14px rgba(16, 53, 246, 0.2)', transition: 'all 0.2s',
-                      }}
-                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
-                      >
-                        <MdSend size={18} /> Send
-                      </button>
-                    </Link>
-                    <Link href="/receive?tab=qr" style={{ textDecoration: 'none' }}>
-                      <button style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'transparent', border: '1px solid var(--border)',
-                        borderRadius: '16px', padding: '12px 24px',
-                        color: 'var(--accent)', fontSize: '14px', fontWeight: 800, cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
-                        onMouseOver={e => e.currentTarget.style.background = 'var(--surface-raised)'}
-                        onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-                      >
-                        <MdQrCode size={18} /> Receive
-                      </button>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Radar Concentric Circles Graphic */}
-                <div style={{
-                  width: '140px',
-                  height: '140px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  zIndex: 2,
-                  marginRight: '16px',
-                }}>
-                  {/* Faint circles */}
-                  <div style={{ position: 'absolute', width: '130px', height: '130px', borderRadius: '50%', border: '1px dashed rgba(16, 53, 246, 0.15)' }} />
-                  <div style={{ position: 'absolute', width: '100px', height: '100px', borderRadius: '50%', border: '1px solid rgba(16, 53, 246, 0.08)' }} />
-                  <div style={{ position: 'absolute', width: '70px', height: '70px', borderRadius: '50%', border: '1px solid rgba(16, 53, 246, 0.1)' }} />
-                  {/* Center Logo Bubble */}
-                  <div style={{
-                    width: '54px',
-                    height: '54px',
-                    borderRadius: '50%',
-                    background: 'var(--accent)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 4px 16px rgba(16, 53, 246, 0.3)'
-                  }}>
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile Registration / Status Section */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '28px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <MdPerson size={20} style={{ color: 'var(--accent)' }} />
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>My Profile</h3>
-                </div>
-
-                {myUsername ? (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'var(--surface-raised)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '16px',
-                    padding: '16px 20px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <div style={{
-                        width: '48px', height: '48px', borderRadius: '50%',
-                        background: 'var(--accent)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '20px', fontWeight: 900, color: 'white'
-                      }}>
-                        {(myUsername as string)[0]?.toUpperCase()}
-                      </div>
-                      <div>
-                        <h4 style={{ color: 'var(--accent)', fontWeight: 800, fontSize: '18px' }}>@{myUsername as string}</h4>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '2px' }}>
-                          Registered on Arc Chain
-                        </p>
-                      </div>
-                    </div>
-                    <span style={{
-                      background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)',
-                      color: 'var(--green)', borderRadius: '20px', padding: '6px 14px', fontSize: '12px', fontWeight: 700
-                    }}>
-                      Active
-                    </span>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{
-                      background: 'var(--accent-glow)', border: '1px solid var(--border-accent)',
-                      borderRadius: '12px', padding: '12px 16px', marginBottom: '16px',
-                    }}>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
-                        Claim your unique username on <strong>{ACTIVE_CHAIN.name}</strong>. Free on-chain registration (gas only).
-                      </p>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{
-                          position: 'absolute', left: '16px', top: '50%',
-                          transform: 'translateY(-50%)', color: 'var(--accent)', fontWeight: 800, fontSize: '16px'
-                        }}>@</span>
-                        <input 
-                          type="text" 
-                          placeholder="choose_username" 
-                          value={usernameInput}
-                          onChange={e => setUsernameInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                          maxLength={30}
-                          disabled={registering || waitingReg}
-                          style={{
-                            width: '100%', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                            borderRadius: '12px', padding: '14px 16px 14px 34px', color: 'var(--text-primary)',
-                            fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box'
-                          }}
-                          onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                          onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                        />
-                      </div>
-
-                      {regError && (
-                        <div style={{ color: 'var(--red)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          ⚠️ <span>{regError}</span>
-                        </div>
-                      )}
-
-                      {(waitingReg || regSuccess) && (
-                        <div style={{
-                          background: 'var(--surface-raised)', border: '1px solid var(--border)',
-                          borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: 700 }}>
-                            <MdAccessTime size={18} className="shimmer-rotate" />
-                            <span>
-                              {waitingReg ? 'Registering username on Arc...' : 'Successfully Registered!'}
-                            </span>
-                          </div>
-                          {regTxHash && (
-                            <a 
-                              href={`${EXPLORER_URL}/tx/${regTxHash}`} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              style={{ color: 'var(--accent)', fontSize: '11px', textDecoration: 'none' }}
-                            >
-                              Track on ArcScan ↗
-                            </a>
-                          )}
-                        </div>
-                      )}
-
-                      <button
-                        disabled={!usernameInput || registering || waitingReg}
-                        onClick={handleRegisterUsername}
-                        style={{
-                          width: '100%',
-                          background: usernameInput ? 'linear-gradient(135deg, #1035f6, #3b82f6)' : 'var(--border)',
-                          border: 'none', borderRadius: '12px', padding: '14px 16px',
-                          color: usernameInput ? 'white' : 'var(--text-secondary)',
-                          fontSize: '15px', fontWeight: 800, cursor: usernameInput ? 'pointer' : 'not-allowed',
-                          boxShadow: usernameInput ? '0 4px 12px rgba(16, 53, 246, 0.2)' : 'none',
-                        }}
-                      >
-                        {waitingReg ? 'Confirming on Arc...' : registering ? 'Claiming...' : 'Claim @username (Free)'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Recent Transactions */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '28px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px' }}>Recent Transactions</h3>
-                  <Link href="/activity" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 700 }}>
-                    View all
-                  </Link>
-                </div>
-
-                {txsLoading ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {[1, 2, 3].map(i => (
-                      <div key={i} style={{ height: '62px', borderRadius: '14px', background: 'var(--surface-raised)' }} className="shimmer" />
-                    ))}
-                  </div>
-                ) : !transactions || transactions.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px 0', border: '1px dashed var(--border)', borderRadius: '16px' }}>
-                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>🌀</div>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>No transactions yet</p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>Make a payment or request funds to get started</p>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {transactions.slice(0, 4).map(tx => {
-                      const isSent = tx.fromAddress.toLowerCase() === address?.toLowerCase()
-                      const rawAmt = tx.amount ? parseInt(tx.amount) : 0
-                      const amountFormatted = !isNaN(rawAmt) ? (rawAmt / 1e6).toFixed(2) : '0.00'
-                      const counterparty = isSent ? tx.toAddress : tx.fromAddress
-
-                      return (
-                        <a
-                          key={tx.id}
-                          href={`${EXPLORER_URL}/tx/${tx.txHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ textDecoration: 'none' }}
-                        >
-                          <div style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
-                            background: 'var(--surface)', border: '1px solid var(--border)',
-                            borderRadius: '16px', padding: '14px 16px', transition: 'all 0.2s',
-                          }}
-                            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                            onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                          >
-                            {/* Icon */}
-                            <div style={{
-                              width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-                              background: isSent ? 'rgba(16, 53, 246, 0.08)' : 'rgba(0, 212, 168, 0.08)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: isSent ? 'var(--accent)' : 'var(--green)',
-                            }}>
-                              {isSent ? <MdCallMade size={20} /> : <MdCallReceived size={20} />}
-                            </div>
-
-                            {/* Details */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {isSent ? 'Sent to' : 'Received from'} {counterparty.slice(0, 6)}…{counterparty.slice(-4)}
-                              </div>
-                              <div style={{ color: 'var(--text-secondary)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                                <span>{tx.memo || 'USDC Transfer'}</span>
-                              </div>
-                            </div>
-
-                            {/* Amount & Status */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{
-                                  fontWeight: 800, fontSize: '14px',
-                                  color: 'var(--text-primary)',
-                                }}>
-                                  {isSent ? '-' : '+'}{amountFormatted}
-                                </span>
-                                <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px', fontWeight: 600 }}>USDC</span>
-                                <div style={{ color: 'var(--text-secondary)', fontSize: '10px', marginTop: '2px' }}>2m ago</div>
-                              </div>
-                              <span style={{
-                                background: 'rgba(16, 185, 129, 0.1)',
-                                border: '1px solid rgba(16, 185, 129, 0.2)',
-                                color: 'var(--green)',
-                                borderRadius: '20px',
-                                padding: '4px 10px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                              }}>
-                                Completed
-                              </span>
-                            </div>
-                          </div>
-                        </a>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+            <div className="v4-arc">
+              <span>Native on</span>
+              <svg
+                width="82"
+                height="26"
+                viewBox="0 0 210 64"
+                fill="none"
+                aria-label="Arc Network"
+                style={{ display: 'block', color: 'var(--ink)' }}
+              >
+                <path
+                  d="M8 54C11 25 22 10 34 10C46 10 57 25 60 54C54.5 50.5 48 48.5 40 48.5H27.5V40.5H45.5C43.5 27 39 19.5 34 19.5C28 19.5 22 30 19.5 54H8Z"
+                  fill="currentColor"
+                />
+                <text
+                  x="74"
+                  y="52"
+                  fill="currentColor"
+                  fontFamily="var(--font)"
+                  fontSize="48"
+                  fontWeight="500"
+                  letterSpacing="-1.5"
+                >
+                  Arc
+                </text>
+              </svg>
             </div>
 
-            {/* Right Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {/* Quick Actions */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Quick Actions</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <QuickActionRow href="/send" icon={MdSend} label="Send Money" />
-                  <QuickActionRow href="/chat-to-pay?tab=x" icon={({ size }: { size?: number }) => <span style={{ fontWeight: 900, fontSize: (size || 16) + "px", lineHeight: 1, fontFamily: "sans-serif" }}>𝕏</span>} label="𝕏 Bot (Social Pay)" />
-                  <QuickActionRow href="/cross-pay" icon={MdSwapHoriz} label="Cross Pay (Bridge & Pay)" />
-                  <QuickActionRow href="/chat-to-pay?tab=telegram" icon={MdChat} label="Chat to Pay (Telegram AI)" />
-                  <QuickActionRow href="/bounties" icon={MdEmojiEvents} label="Explore Bounties" />
-                </div>
-              </div>
-
-              {/* Chat to Pay Showcase Card */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '32px', height: '32px', borderRadius: '10px',
-                      background: 'rgba(0, 136, 204, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#0088cc'
-                    }}>
-                      <MdChat size={18} />
-                    </div>
-                    <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', margin: 0 }}>Chat to Pay</h3>
-                  </div>
-                  <span style={{
-                    fontSize: '11px', fontWeight: 800, color: '#0088cc',
-                    background: 'rgba(0, 136, 204, 0.12)', padding: '4px 10px', borderRadius: '12px'
-                  }}>
-                    Telegram Bot
-                  </span>
-                </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '12.5px', lineHeight: 1.5, marginBottom: '16px' }}>
-                  Send USDC gaslessly to usernames or wallet addresses straight from Telegram using delegated Session Keys.
-                </p>
-                <Link href="/chat-to-pay" style={{ textDecoration: 'none' }}>
-                  <div style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #0088cc, #0070a8)',
-                    color: 'white',
-                    borderRadius: '14px',
-                    padding: '12px 16px',
-                    fontSize: '13.5px',
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 14px rgba(0, 136, 204, 0.25)',
-                    boxSizing: 'border-box'
-                  }}>
-                    <span>Open Telegram Pay Panel</span>
-                    <MdChevronRight size={18} />
-                  </div>
-                </Link>
-              </div>
-
-              {/* Arc Network Info */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>{ACTIVE_CHAIN.name}</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <NetworkRow label="Network Status" value={<><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--green)', display: 'inline-block', marginRight: '6px' }} />Connected</>} />
-                  <NetworkRow label="Chain ID" value={ACTIVE_CHAIN.id.toString()} />
-                  <NetworkRow label="Native Gas" value="USDC (Precompile)" />
-                  <NetworkRow label="RPC" value={ACTIVE_CHAIN.rpcUrls.default.http[0].replace('https://', '')} />
-                </div>
-              </div>
-
-              {/* Get Started Links */}
-              <div style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '24px',
-                padding: '24px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.015)'
-              }}>
-                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '15px', marginBottom: '16px' }}>Get Started</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <HelpRow href="https://www.arc.network/" label="Learn about Arc" />
-                </div>
-              </div>
+            <div className="v4-social-links">
+              <a
+                href="https://t.me/EasyZpayBot"
+                target="_blank"
+                rel="noreferrer"
+                className="v4-social-pill"
+              >
+                <img src="/logos/telegram.svg" alt="Telegram" width={18} height={18} />
+                <span>Telegram Bot</span>
+              </a>
+              <a
+                href="https://x.com/easyzpay"
+                target="_blank"
+                rel="noreferrer"
+                className="v4-social-pill"
+                aria-label="EasyZpay on X"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                <span>@easyzpay</span>
+              </a>
             </div>
           </div>
-        )}
-      </NetworkGuard>
-    </PageLayout>
-  )
-}
 
-function QuickActionRow({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
-  return (
-    <Link href={href} style={{ textDecoration: 'none' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 16px', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-        borderRadius: '16px', transition: 'all 0.2s', cursor: 'pointer'
-      }}
-        onMouseOver={e => {
-          e.currentTarget.style.borderColor = 'var(--accent)'
-          e.currentTarget.style.transform = 'translateX(2px)'
-        }}
-        onMouseOut={e => {
-          e.currentTarget.style.borderColor = 'var(--border)'
-          e.currentTarget.style.transform = 'translateX(0)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '32px', height: '32px', borderRadius: '10px',
-            background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--accent)'
-          }}>
-            <Icon size={16} />
+          <div className="v4-stats">
+            <div>
+              Sub-second<small>Finality on Arc</small>
+            </div>
+            <hr />
+            <div>
+              Near-zero<small>Gas fees</small>
+            </div>
           </div>
-          <span style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 800 }}>{label}</span>
+          <div className="v4-hint" aria-hidden="true">
+            Scroll ↓
+          </div>
         </div>
-        <MdChevronRight size={20} style={{ color: 'var(--text-secondary)' }} />
+
+        {/* Blue Visual Panel BELOW first screen (order: 2, reveals on scroll via IntersectionObserver) */}
+        <section
+          ref={visRef}
+          className={`v4-visual ${visIn ? 'in' : ''}`}
+          aria-hidden="true"
+        >
+          <div className="v4-o v4-ring v4-r1" style={{ ['--d' as string]: -12 }}>
+            <div className="v4-f" style={{ ['--t' as string]: '8s' }} />
+          </div>
+          <div className="v4-o v4-ring v4-r2" style={{ ['--d' as string]: 14 }} />
+          <div className="v4-o v4-coin v4-chk" style={{ ['--d' as string]: -18 }}>
+            <div className="v4-f" style={{ ['--t' as string]: '5s' }}>
+              ✓
+            </div>
+          </div>
+          <div className="v4-o v4-coin v4-dot" style={{ ['--d' as string]: 16 }}>
+            <div className="v4-f" style={{ ['--t' as string]: '7s', ['--dl' as string]: '-1s' }}>
+              <img alt="USDC" src="/logos/usdc.svg" style={{ width: '100%', height: '100%', display: 'block' }} />
+            </div>
+          </div>
+          <div className="v4-o v4-coin v4-usdc" style={{ ['--d' as string]: 22 }}>
+            <img alt="USDC" src="/logos/usdc.svg" style={{ width: '100%', height: '100%', display: 'block' }} />
+          </div>
+          <div className="v4-o v4-glass" style={{ ['--d' as string]: -20 }}>
+            <div className="v4-f" style={{ ['--t' as string]: '6s', ['--dl' as string]: '-3s' }} />
+          </div>
+
+          <div className="v4-o v4-phone" style={{ ['--d' as string]: 8 }}>
+            <div className="v4-f" style={{ ['--t' as string]: '7s' }}>
+              <h3>Pay by username</h3>
+              <div className="v4-row">
+                <em>To</em>
+                <span>
+                  @<span className="v4-typed">ali</span>
+                </span>
+              </div>
+              <div className="v4-row">
+                <em>Amount</em>
+                <span>50 USDC</span>
+              </div>
+              <div className="v4-send">Send</div>
+              <div className="v4-cards">
+                <b />
+                <b />
+                <b />
+              </div>
+              <div className="v4-done">
+                <div>
+                  <span>✓</span>50 USDC sent to @ali
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Footer Strip (order: 3) */}
+        <footer className="v4-footer">
+          <span>EasyZpay &mdash; USDC payments on Arc Network</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link href="/docs" style={{ color: 'var(--ink)', textDecoration: 'none', fontWeight: 500 }}>
+              Docs
+            </Link>
+            <a
+              href="https://t.me/EasyZpayBot"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="EasyZpay Telegram Bot"
+              style={{ display: 'inline-flex', alignItems: 'center' }}
+            >
+              <img src="/logos/telegram.svg" alt="Telegram" width={18} height={18} />
+            </a>
+            <a
+              href="https://x.com/easyzpay"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="EasyZpay on X"
+              style={{ color: 'var(--ink)', display: 'inline-flex', alignItems: 'center' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </a>
+          </div>
+        </footer>
       </div>
-    </Link>
-  )
-}
 
-function NetworkRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 700 }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 800 }}>{value}</span>
+      {/* A3: Desktop Real Sidebar Slide-In */}
+      <Sidebar
+        drawerMode={true}
+        isOpen={desktopDrawerOpen}
+        onClose={handleCloseDrawer}
+        onNavigate={handleDrawerNavigate}
+      />
+
+      {/* A4: Mobile Floating Pill Glass Tab Bar */}
+      <MobileGlassBar
+        visible={mobileBarOpen}
+        animateEntrance={true}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        onNavigate={() => {
+          if (navTimerRef.current) clearTimeout(navTimerRef.current)
+        }}
+      />
     </div>
-  )
-}
-
-function HelpRow({ href, label }: { href: string; label: string }) {
-  return (
-    <a 
-      href={href} 
-      target="_blank" 
-      rel="noreferrer" 
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 14px', background: 'var(--surface-raised)', border: '1px solid var(--border)',
-        borderRadius: '12px', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700,
-        transition: 'all 0.2s'
-      }}
-      onMouseOver={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-      onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}
-    >
-      <span>{label}</span>
-      <MdOpenInNew size={18} style={{ color: 'var(--text-muted)' }} />
-    </a>
   )
 }

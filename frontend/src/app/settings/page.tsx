@@ -79,8 +79,8 @@ export default function SettingsPage() {
   return (
     <PageLayout>
       <main style={{ maxWidth: '560px', margin: '0 auto' }}>
-        <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px', fontWeight: 600 }}>
-          ← Back to Dashboard
+        <Link href="/send" style={{ color: 'var(--text-muted)', fontSize: '13px', textDecoration: 'none', display: 'block', marginBottom: '20px', fontWeight: 600 }}>
+          ← Back to Send
         </Link>
 
         <NetworkGuard>
@@ -188,54 +188,6 @@ export default function SettingsPage() {
                 </button>
               </>
             )}
-          </div>
-
-          {/* WhatsApp Chat-to-Pay (Dedicated Panel Link) */}
-          <div style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '24px',
-            padding: '24px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            flexWrap: 'wrap'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div style={{
-                width: '40px', height: '40px', borderRadius: '12px',
-                background: 'rgba(37, 211, 102, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#25D366', flexShrink: 0
-              }}>
-                <MdChat size={20} />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                  Chat to Pay
-                </h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                  Manage delegated WhatsApp session keys and daily spending limits in the dedicated tab.
-                </p>
-              </div>
-            </div>
-            <Link href="/chat-to-pay" style={{ textDecoration: 'none' }}>
-              <button style={{
-                background: 'var(--surface-raised)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '10px 16px',
-                color: 'var(--accent)',
-                fontSize: '12.5px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}>
-                Open Chat to Pay Tab →
-              </button>
-            </Link>
           </div>
 
           {/* Wallet Info */}

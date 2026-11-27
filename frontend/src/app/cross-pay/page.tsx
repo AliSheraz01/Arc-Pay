@@ -1753,21 +1753,20 @@ function ChainLogo({ chain, size = 20 }: { chain: CctpChainConfig; size?: number
 
   if (chain.chainId === 5042 || chain.chainId === 5042002) {
     return (
-      <div style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        background: 'var(--accent)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        boxShadow: '0 2px 6px rgba(16, 53, 246, 0.3)'
-      }}>
-        <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="none">
-          <path d="M4 19A8 8 0 0 1 20 19" stroke="white" strokeWidth="4.5" strokeLinecap="round" fill="none" />
-        </svg>
-      </div>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        fill="none"
+        aria-label={chain.name}
+        style={{ flexShrink: 0, display: 'block' }}
+      >
+        <circle cx="32" cy="32" r="32" fill="#2B5BFF" />
+        <path
+          d="M14 48C16.4 26.5 24.4 15 32 15C39.6 15 47.6 26.5 50 48C46.2 45.4 41.6 44 36 44H27.5V38.2H39.8C38.4 28.4 35.4 22.8 32 22.8C27.8 22.8 23.6 30.6 21.8 48H14Z"
+          fill="#FFFFFF"
+        />
+      </svg>
     )
   }
 
